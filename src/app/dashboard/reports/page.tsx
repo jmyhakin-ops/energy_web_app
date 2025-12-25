@@ -219,7 +219,7 @@ export default function ReportsPage() {
                                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                                         <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                                         <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
-                                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                                        <Tooltip formatter={(v) => formatCurrency(Number(v) || 0)} />
                                         <Legend />
                                         <Area type="monotone" dataKey="sales" stroke="#3b82f6" fill="url(#salesGradient)" strokeWidth={2} name="Total Sales" />
                                         <Line type="monotone" dataKey="mpesa" stroke="#22c55e" strokeWidth={2} dot={false} name="M-Pesa" />
@@ -245,7 +245,7 @@ export default function ReportsPage() {
                                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                                         <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                                         <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
-                                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                                        <Tooltip formatter={(v) => formatCurrency(Number(v) || 0)} />
                                         <Legend />
                                         <Bar dataKey="thisYear" fill="#3b82f6" name="2024" radius={[4, 4, 0, 0]} />
                                         <Bar dataKey="lastYear" fill="#94a3b8" name="2023" radius={[4, 4, 0, 0]} />
@@ -333,7 +333,7 @@ export default function ReportsPage() {
                                                 <Cell key={`cell-${index}`} fill={entry.color} />
                                             ))}
                                         </Pie>
-                                        <Tooltip formatter={(v: number, name: string, entry: any) => [formatCurrency(entry.payload.amount), name]} />
+                                        <Tooltip formatter={(v, name, entry: any) => [formatCurrency(entry?.payload?.amount || 0), String(name)]} />
                                     </RechartsPie>
                                 </ResponsiveContainer>
                             </div>
