@@ -55,13 +55,14 @@ export default function HomePage() {
               <Link href="/login" className="px-5 py-2.5 text-gray-700 font-semibold hover:text-gray-900 transition-colors">
                 Sign In
               </Link>
-              <Link
-                href="/dashboard"
-                className="group px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-300 flex items-center gap-2"
+              <button
+                disabled
+                className="group px-6 py-3 bg-gray-300 text-gray-500 font-semibold rounded-xl cursor-not-allowed opacity-60 flex items-center gap-2"
+                title="Coming Soon"
               >
                 Get Started Free
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </Link>
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
 
             <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden p-2 rounded-xl hover:bg-gray-100">
@@ -100,13 +101,14 @@ export default function HomePage() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-              <Link
-                href="/dashboard"
-                className="group w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-bold text-lg rounded-2xl hover:shadow-2xl hover:shadow-blue-500/30 transition-all duration-300 flex items-center justify-center gap-3"
+              <button
+                disabled
+                className="group w-full sm:w-auto px-8 py-4 bg-gray-300 text-gray-500 font-bold text-lg rounded-2xl cursor-not-allowed opacity-60 flex items-center justify-center gap-3"
+                title="Coming Soon"
               >
                 <span>Start Free 14-Day Trial</span>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Link>
+                <ArrowRight className="w-5 h-5" />
+              </button>
               <button className="w-full sm:w-auto px-8 py-4 bg-gray-100 text-gray-700 font-bold text-lg rounded-2xl hover:bg-gray-200 transition-all flex items-center justify-center gap-3 border border-gray-200">
                 <Play className="w-5 h-5" />
                 Watch Demo
@@ -205,13 +207,14 @@ export default function HomePage() {
                 Join 500+ fuel stations already using EnergyStation to streamline operations and increase revenue.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link
-                  href="/dashboard"
-                  className="w-full sm:w-auto px-10 py-5 bg-white text-blue-600 font-bold text-lg rounded-2xl hover:shadow-2xl transition-all flex items-center justify-center gap-3"
+                <button
+                  disabled
+                  className="w-full sm:w-auto px-10 py-5 bg-gray-300 text-gray-500 font-bold text-lg rounded-2xl cursor-not-allowed opacity-60 flex items-center justify-center gap-3"
+                  title="Coming Soon"
                 >
                   Start Free Trial
                   <ArrowRight className="w-5 h-5" />
-                </Link>
+                </button>
                 <Link
                   href="/login"
                   className="w-full sm:w-auto px-10 py-5 bg-blue-800/50 text-white font-bold text-lg rounded-2xl hover:bg-blue-800 transition-all border border-white/20"
