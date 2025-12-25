@@ -18,6 +18,7 @@ import {
     Bell,
     Search,
     TrendingUp,
+    UserCog,
 } from "lucide-react"
 import { toast } from "@/components/ui/toast"
 
@@ -31,7 +32,7 @@ const navItems = [
     { label: "Sales", icon: Wallet, href: "/dashboard/sales" },
     { label: "M-Pesa", icon: Smartphone, href: "/dashboard/mpesa" },
     { label: "Reports", icon: TrendingUp, href: "/dashboard/reports" },
-    { label: "Users", icon: Users, href: "/dashboard/users" },
+    { label: "Users", icon: UserCog, href: "/dashboard/users" },
 ]
 
 // Sidebar Component
@@ -76,7 +77,7 @@ function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
                 {/* Navigation - Scrollable */}
                 <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
                     {navItems.map((item) => {
-                        const isActive = pathname === item.href
+                        const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
                         return (
                             <Link
                                 key={item.href}
