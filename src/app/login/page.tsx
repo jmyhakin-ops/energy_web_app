@@ -47,7 +47,7 @@ export default function LoginPage() {
                             <Fuel className="w-7 h-7 text-white" />
                         </div>
                         <div>
-                            <h1 className="font-bold text-2xl text-gray-900">EnergyStation</h1>
+                            <h1 className="font-bold text-2xl text-gray-900">Alpha Energy</h1>
                             <p className="text-sm text-gray-500">Fuel Station Management</p>
                         </div>
                     </Link>
@@ -143,35 +143,21 @@ export default function LoginPage() {
                         </button>
                     </form>
 
-                    {/* Demo Accounts */}
-                    <div className="mt-10 p-6 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl border border-blue-100">
-                        <p className="text-sm font-bold text-gray-700 mb-4">
-                            🔑 Quick Demo Access
+                    {/* Contact Info */}
+                    <div className="mt-10 p-6 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl border border-blue-100 text-center">
+                        <p className="text-sm font-medium text-gray-600">
+                            Need help? Contact support
                         </p>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button
-                                onClick={() => setFormData({ ...formData, username: "superadmin", password: "demo123" })}
-                                className="p-4 bg-white rounded-xl hover:shadow-lg transition-all text-left border border-blue-100 hover:border-blue-300"
-                            >
-                                <p className="font-bold text-gray-900">Super Admin</p>
-                                <p className="text-xs text-gray-500 mt-0.5">superadmin / demo123</p>
-                            </button>
-                            <button
-                                onClick={() => setFormData({ ...formData, username: "manager", password: "demo123" })}
-                                className="p-4 bg-white rounded-xl hover:shadow-lg transition-all text-left border border-blue-100 hover:border-blue-300"
-                            >
-                                <p className="font-bold text-gray-900">Manager</p>
-                                <p className="text-xs text-gray-500 mt-0.5">manager / demo123</p>
-                            </button>
-                        </div>
+                        <p className="text-lg font-bold text-blue-600 mt-1">
+                            📞 +254720316175
+                        </p>
                     </div>
 
-                    {/* Sign Up Link */}
-                    <p className="mt-8 text-center text-gray-600">
-                        Don't have an account?{" "}
-                        <a href="#" className="text-blue-600 font-bold hover:text-blue-700">
-                            Get started free
-                        </a>
+                    {/* Copyright */}
+                    <p className="mt-8 text-center text-sm text-gray-500">
+                        © 2025 Alpha Energy App. All rights reserved.
+                        <br />
+                        <span className="text-xs text-gray-400">Version 3.5 | Developed by Jimhawkins Korir</span>
                     </p>
                 </div>
             </div>
@@ -192,9 +178,9 @@ export default function LoginPage() {
                     </div>
 
                     <h2 className="text-4xl font-extrabold text-center mb-6">
-                        Manage Your Fuel Stations
+                        Alpha Energy App
                         <br />
-                        <span className="text-cyan-300">Like Never Before</span>
+                        <span className="text-cyan-300">Fuel Station Management</span>
                     </h2>
 
                     <p className="text-xl text-blue-100 text-center max-w-md mb-12">
@@ -204,7 +190,7 @@ export default function LoginPage() {
                     {/* Feature Pills */}
                     <div className="flex flex-wrap justify-center gap-4 mb-12">
                         {[
-                            { icon: Building2, label: "50+ Stations" },
+                            { icon: Building2, label: "Multi-Station" },
                             { icon: BarChart3, label: "Real-time Analytics" },
                             { icon: Smartphone, label: "M-Pesa Ready" },
                         ].map((item) => (
@@ -215,18 +201,10 @@ export default function LoginPage() {
                         ))}
                     </div>
 
-                    {/* Stats */}
-                    <div className="grid grid-cols-3 gap-8 w-full max-w-md">
-                        {[
-                            { value: "500+", label: "Stations" },
-                            { value: "2.5M+", label: "Transactions" },
-                            { value: "99.9%", label: "Uptime" },
-                        ].map((stat) => (
-                            <div key={stat.label} className="text-center p-5 bg-white/10 backdrop-blur rounded-2xl">
-                                <p className="text-3xl font-extrabold">{stat.value}</p>
-                                <p className="text-sm text-blue-200 mt-1">{stat.label}</p>
-                            </div>
-                        ))}
+                    {/* Developer Info */}
+                    <div className="text-center text-blue-200 text-sm">
+                        <p>Developed by <span className="font-bold text-white">Jimhawkins Korir</span></p>
+                        <p className="mt-1">📞 +254720316175</p>
                     </div>
                 </div>
             </div>

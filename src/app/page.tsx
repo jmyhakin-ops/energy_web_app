@@ -39,8 +39,8 @@ export default function HomePage() {
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white" />
               </div>
               <div>
-                <span className="font-bold text-xl text-gray-900">EnergyStation</span>
-                <span className="hidden sm:inline text-xs bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-2 py-0.5 rounded-full ml-2">PRO</span>
+                <span className="font-bold text-xl text-gray-900">Alpha Energy</span>
+                <span className="hidden sm:inline text-xs bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-2 py-0.5 rounded-full ml-2">v3.5</span>
               </div>
             </Link>
 
@@ -232,14 +232,16 @@ export default function HomePage() {
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
                 <Fuel className="w-6 h-6 text-white" />
               </div>
-              <span className="font-bold text-2xl">EnergyStation</span>
+              <span className="font-bold text-2xl">Alpha Energy</span>
             </div>
             <p className="text-gray-400 text-center lg:text-left max-w-md">
               The complete fuel station management platform. Built for Kenya, trusted by industry leaders.
             </p>
           </div>
-          <div className="pt-8 text-center text-gray-500">
-            <p>© 2024 Energy Solutions Ltd. All rights reserved.</p>
+          <div className="pt-8 text-center">
+            <p className="text-gray-500">© 2025 Alpha Energy App. All rights reserved.</p>
+            <p className="text-gray-600 mt-2">Developed by <span className="font-bold text-white">Jimhawkins Korir</span> | 📞 +254720316175</p>
+            <p className="text-gray-600 text-sm mt-1">Version 3.5</p>
           </div>
         </div>
       </footer>

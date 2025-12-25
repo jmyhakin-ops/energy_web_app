@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
     Fuel,
     Building2,
@@ -19,6 +19,7 @@ import {
     Search,
     TrendingUp,
 } from "lucide-react"
+import { toast } from "@/components/ui/toast"
 
 // Navigation Items
 const navItems = [
@@ -35,6 +36,12 @@ const navItems = [
 // Sidebar Component
 function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
     const pathname = usePathname()
+    const router = useRouter()
+
+    const handleLogout = () => {
+        toast.success("Logged out", "See you next time!")
+        router.push("/login")
+    }
 
     return (
         <>
@@ -57,8 +64,8 @@ function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
                             <Fuel className="w-5 h-5 text-white" />
                         </div>
-                        <span className="font-bold text-gray-900">EnergyStation</span>
-                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">PRO</span>
+                        <span className="font-bold text-gray-900">Alpha Energy</span>
+                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">v3.5</span>
                     </Link>
                     <button onClick={onClose} className="lg:hidden p-2 rounded-lg hover:bg-gray-100">
                         <X className="w-5 h-5 text-gray-500" />
@@ -98,10 +105,19 @@ function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
                         <Settings className="w-5 h-5 text-gray-400" />
                         Settings
                     </Link>
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-600 hover:bg-red-50">
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
                         <LogOut className="w-5 h-5" />
                         Logout
                     </button>
+                </div>
+
+                {/* Footer */}
+                <div className="p-3 border-t border-gray-100 text-center flex-shrink-0">
+                    <p className="text-xs text-gray-400">© 2025 Alpha Energy App</p>
+                    <p className="text-xs text-gray-400">By Jimhawkins Korir</p>
                 </div>
             </aside>
         </>
@@ -110,6 +126,13 @@ function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
 
 // Header Component
 function Header({ onMenuClick }: { onMenuClick: () => void }) {
+    const router = useRouter()
+
+    const handleLogout = () => {
+        toast.success("Logged out", "See you next time!")
+        router.push("/login")
+    }
+
     return (
         <header className="h-14 sm:h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-6 sticky top-0 z-30">
             {/* Left Side */}
