@@ -95,6 +95,24 @@ export default function LoginPage() {
             // Validate credentials (replace with real auth)
             await new Promise((resolve) => setTimeout(resolve, 500))
 
+            // ADMIN BYPASS: Allow direct login for initial setup
+            // This allows first-time access to register phone numbers
+            const isAdminBypass = (
+                (formData.username.toLowerCase() === "admin" ||
+                    formData.username.toLowerCase() === "superadmin" ||
+                    formData.username === "jimhawkins") &&
+                (formData.password === "admin123" ||
+                    formData.password === "Admin@123" ||
+                    formData.password === "1234")
+            )
+
+            if (isAdminBypass) {
+                toast.success("🔓 Admin Bypass Active", "Logging in without OTP for initial setup...")
+                await new Promise((resolve) => setTimeout(resolve, 1000))
+                router.push("/dashboard")
+                return
+            }
+
             // Get user's phone from database - replace this with real API call
             // For now using a default phone - you should get this from your users_new table
             const userPhoneNumber = "+254720316175" // Replace with actual user phone lookup
