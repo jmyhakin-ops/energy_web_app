@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Africa's Talking Configuration - Get from environment variables
+// ============================================================
+// SMS PROVIDER CONFIGURATION
+// Choose your provider by setting the appropriate env vars
+// ============================================================
+
+// TWILIO Configuration (RECOMMENDED - $15.50 FREE credits!)
+// Sign up at: https://www.twilio.com/try-twilio (no credit card needed)
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || ''
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || ''
+const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER || '' // Your Twilio phone number
+
+// Africa's Talking Configuration (Fallback)
 const AT_API_KEY = process.env.AFRICASTALKING_API_KEY || ''
 const AT_USERNAME = process.env.AFRICASTALKING_USERNAME || 'sandbox'
 const AT_SENDER_ID = process.env.AFRICASTALKING_SENDER_ID || 'AlphaEnergy'
@@ -11,6 +22,17 @@ const otpStore = new Map<string, { otp: string; expires: number; attempts: numbe
 // OTP Configuration
 const OTP_EXPIRY_MS = 5 * 60 * 1000 // 5 minutes
 const MAX_ATTEMPTS = 3
+
+// Determine which provider to use (Twilio has priority)
+function getActiveProvider(): 'twilio' | 'africastalking' | 'none' {
+    if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER) {
+        return 'twilio'
+    }
+    if (AT_API_KEY) {
+        return 'africastalking'
+    }
+    return 'none'
+}
 
 export async function POST(request: NextRequest) {
     try {
@@ -34,13 +56,28 @@ export async function POST(request: NextRequest) {
                 attempts: 0,
             })
 
-            // Send SMS via Africa's Talking
-            const smsResult = await sendAfricasTalkingSms(normalizedPhone, generatedOtp)
+            // Send SMS via configured provider
+            const provider = getActiveProvider()
+            let smsResult: { success: boolean; error?: string }
+
+            if (provider === 'twilio') {
+                smsResult = await sendTwilioSms(normalizedPhone, generatedOtp)
+            } else if (provider === 'africastalking') {
+                smsResult = await sendAfricasTalkingSms(normalizedPhone, generatedOtp)
+            } else {
+                // Development mode - just log the OTP
+                console.log(`📱 [DEV MODE] OTP ${generatedOtp} would be sent to ${normalizedPhone}`)
+                console.log(`⚠️ Configure SMS provider in Vercel Environment Variables:`)
+                console.log(`   - TWILIO: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER`)
+                console.log(`   - Africa's Talking: AFRICASTALKING_API_KEY, AFRICASTALKING_USERNAME`)
+                smsResult = { success: true }
+            }
 
             if (smsResult.success) {
                 return NextResponse.json({
                     success: true,
                     message: `OTP sent to ${normalizedPhone.slice(0, 7)}****${normalizedPhone.slice(-2)}`,
+                    provider: provider !== 'none' ? provider : 'dev-mode',
                 })
             } else {
                 return NextResponse.json({
@@ -112,16 +149,60 @@ function normalizeKenyanPhone(phone: string): string {
     return normalized
 }
 
-// Send SMS via Africa's Talking API
-async function sendAfricasTalkingSms(phone: string, otp: string): Promise<{ success: boolean; error?: string }> {
+// ============================================================
+// TWILIO SMS PROVIDER (RECOMMENDED - FREE $15.50 TRIAL)
+// Sign up: https://www.twilio.com/try-twilio
+// ============================================================
+async function sendTwilioSms(phone: string, otp: string): Promise<{ success: boolean; error?: string }> {
     const message = `Your Alpha Energy verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`
 
-    // If no API key configured, log and simulate success (for development)
-    if (!AT_API_KEY) {
-        console.log(`📱 [DEV MODE] OTP ${otp} would be sent to ${phone}`)
-        console.log(`⚠️ Set AFRICASTALKING_API_KEY in Vercel Environment Variables to enable real SMS`)
-        return { success: true }
+    console.log(`📱 Sending SMS via Twilio`)
+    console.log(`📞 To: ${phone}`)
+
+    try {
+        // Twilio uses Basic Auth with Account SID and Auth Token
+        const authString = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64')
+
+        const response = await fetch(
+            `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Basic ${authString}`,
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    To: phone,
+                    From: TWILIO_PHONE_NUMBER,
+                    Body: message,
+                }),
+            }
+        )
+
+        const result = await response.json()
+        console.log('Twilio Response:', JSON.stringify(result, null, 2))
+
+        if (response.ok && result.sid) {
+            console.log(`✅ SMS sent successfully via Twilio to ${phone}`)
+            return { success: true }
+        } else {
+            console.error('Twilio API Error:', result)
+            return {
+                success: false,
+                error: result.message || 'Failed to send SMS via Twilio'
+            }
+        }
+    } catch (error) {
+        console.error('Twilio API Connection Error:', error)
+        return { success: false, error: 'Failed to connect to Twilio SMS service' }
     }
+}
+
+// ============================================================
+// AFRICA'S TALKING SMS PROVIDER (FALLBACK)
+// ============================================================
+async function sendAfricasTalkingSms(phone: string, otp: string): Promise<{ success: boolean; error?: string }> {
+    const message = `Your Alpha Energy verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`
 
     // Use sandbox API for sandbox mode
     const isSandbox = AT_USERNAME.toLowerCase() === 'sandbox'
