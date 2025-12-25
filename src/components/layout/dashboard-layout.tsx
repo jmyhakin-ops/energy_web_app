@@ -31,6 +31,7 @@ const navItems = [
     { label: "Sales", icon: Wallet, href: "/dashboard/sales" },
     { label: "M-Pesa", icon: Smartphone, href: "/dashboard/mpesa" },
     { label: "Reports", icon: TrendingUp, href: "/dashboard/reports" },
+    { label: "Users", icon: Users, href: "/dashboard/users" },
 ]
 
 // Sidebar Component
