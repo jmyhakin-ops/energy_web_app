@@ -23,9 +23,6 @@ import {
 } from "lucide-react"
 import { toast } from "@/components/ui/toast"
 
-// Configuration - Update this URL to your PHP backend
-const SMS_API_URL = process.env.NEXT_PUBLIC_SMS_API_URL || "https://your-server.com/sms_otp.php"
-
 // OTP Configuration
 const OTP_LENGTH = 6
 
@@ -57,10 +54,10 @@ export default function LoginPage() {
         }, 1000)
     }
 
-    // Send OTP via PHP API
+    // Send OTP via API
     const sendOtp = async (phone: string) => {
         try {
-            const response = await fetch(SMS_API_URL, {
+            const response = await fetch('/api/send-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'send', phone })
@@ -73,10 +70,10 @@ export default function LoginPage() {
         }
     }
 
-    // Verify OTP via PHP API
+    // Verify OTP via API
     const verifyOtp = async (phone: string, otpCode: string) => {
         try {
-            const response = await fetch(SMS_API_URL, {
+            const response = await fetch('/api/send-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'verify', phone, otp: otpCode })
@@ -85,7 +82,7 @@ export default function LoginPage() {
             return data
         } catch (error) {
             console.error('Verify OTP Error:', error)
-            return { success: false, error: 'Failed to connect to verification service' }
+            return { success: false, error: 'Failed to verify OTP' }
         }
     }
 
@@ -95,18 +92,18 @@ export default function LoginPage() {
         setLoading(true)
 
         try {
-            // TODO: Validate credentials against your database here
-            // For now, we'll proceed to OTP step
+            // Validate credentials (replace with real auth)
             await new Promise((resolve) => setTimeout(resolve, 500))
 
-            // Get user's phone from database (mock for now - replace with real API call)
-            const mockUserPhone = "+254720316175" // Replace with actual user phone from DB
-            setUserPhone(mockUserPhone)
+            // Get user's phone from database - replace this with real API call
+            // For now using a default phone - you should get this from your users_new table
+            const userPhoneNumber = "+254720316175" // Replace with actual user phone lookup
+            setUserPhone(userPhoneNumber)
 
-            // Send OTP to user's phone
-            toast.success("📱 Sending OTP...", `To ${mockUserPhone.slice(0, 7)}****`)
+            // Send OTP
+            toast.success("📱 Sending OTP...", `To ${userPhoneNumber.slice(0, 7)}****`)
 
-            const result = await sendOtp(mockUserPhone)
+            const result = await sendOtp(userPhoneNumber)
 
             if (result.success) {
                 toast.success("✅ OTP Sent!", result.message || "Check your phone")
@@ -284,7 +281,7 @@ export default function LoginPage() {
                                     <span className="font-semibold">🔐 Secured with 2FA</span>
                                 </div>
                                 <p className="text-sm text-green-600 mt-1">
-                                    OTP will be sent to your registered phone number
+                                    OTP will be sent to your registered phone via Africa's Talking
                                 </p>
                             </div>
                         </>
@@ -438,7 +435,7 @@ export default function LoginPage() {
 
                     <p className="text-xl text-blue-100 text-center max-w-md mb-12">
                         {step === "credentials"
-                            ? "Secure login with SMS verification to protect your account."
+                            ? "Secure login with SMS verification via Africa's Talking."
                             : "Enter the code sent to your phone to complete login."
                         }
                     </p>

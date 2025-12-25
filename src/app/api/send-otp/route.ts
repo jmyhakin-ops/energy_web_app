@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Africa's Talking SMS Configuration
-const AFRICASTALKING_API_KEY = process.env.AFRICASTALKING_API_KEY || ''
-const AFRICASTALKING_USERNAME = process.env.AFRICASTALKING_USERNAME || 'sandbox'
-const AFRICASTALKING_SENDER_ID = process.env.AFRICASTALKING_SENDER_ID || 'AlphaEnergy'
+// Africa's Talking Configuration - Get from environment variables
+const AT_API_KEY = process.env.AFRICASTALKING_API_KEY || ''
+const AT_USERNAME = process.env.AFRICASTALKING_USERNAME || 'sandbox'
+const AT_SENDER_ID = process.env.AFRICASTALKING_SENDER_ID || 'AlphaEnergy'
 
-// In-memory OTP store (use Redis in production)
+// In-memory OTP store (use Redis in production for scaling)
 const otpStore = new Map<string, { otp: string; expires: number; attempts: number }>()
 
 // OTP Configuration
@@ -17,62 +17,64 @@ export async function POST(request: NextRequest) {
         const { phone, action, otp } = await request.json()
 
         if (!phone) {
-            return NextResponse.json({ error: 'Phone number is required' }, { status: 400 })
+            return NextResponse.json({ success: false, error: 'Phone number is required' }, { status: 400 })
         }
 
-        // Normalize phone number
-        const normalizedPhone = normalizePhoneNumber(phone)
+        // Normalize phone number to Kenyan format
+        const normalizedPhone = normalizeKenyanPhone(phone)
 
         if (action === 'send') {
             // Generate 6-digit OTP
             const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString()
 
-            // Store OTP
+            // Store OTP with expiry
             otpStore.set(normalizedPhone, {
                 otp: generatedOtp,
                 expires: Date.now() + OTP_EXPIRY_MS,
                 attempts: 0,
             })
 
-            // Send SMS
-            const smsResult = await sendSms(normalizedPhone, generatedOtp)
+            // Send SMS via Africa's Talking
+            const smsResult = await sendAfricasTalkingSms(normalizedPhone, generatedOtp)
 
             if (smsResult.success) {
                 return NextResponse.json({
                     success: true,
-                    message: 'OTP sent successfully',
-                    // Only include OTP in development for testing
-                    ...(process.env.NODE_ENV === 'development' && { otp: generatedOtp }),
+                    message: `OTP sent to ${normalizedPhone.slice(0, 7)}****${normalizedPhone.slice(-2)}`,
                 })
             } else {
-                return NextResponse.json({ error: 'Failed to send SMS' }, { status: 500 })
+                return NextResponse.json({
+                    success: false,
+                    error: smsResult.error || 'Failed to send SMS'
+                }, { status: 500 })
             }
         }
 
         if (action === 'verify') {
             if (!otp) {
-                return NextResponse.json({ error: 'OTP is required' }, { status: 400 })
+                return NextResponse.json({ success: false, error: 'OTP is required' }, { status: 400 })
             }
 
             const stored = otpStore.get(normalizedPhone)
 
             if (!stored) {
-                return NextResponse.json({ error: 'No OTP found. Please request a new one.' }, { status: 400 })
+                return NextResponse.json({ success: false, error: 'No OTP found. Please request a new one.' }, { status: 400 })
             }
 
             if (Date.now() > stored.expires) {
                 otpStore.delete(normalizedPhone)
-                return NextResponse.json({ error: 'OTP has expired. Please request a new one.' }, { status: 400 })
+                return NextResponse.json({ success: false, error: 'OTP has expired. Please request a new one.' }, { status: 400 })
             }
 
             if (stored.attempts >= MAX_ATTEMPTS) {
                 otpStore.delete(normalizedPhone)
-                return NextResponse.json({ error: 'Too many failed attempts. Please request a new OTP.' }, { status: 400 })
+                return NextResponse.json({ success: false, error: 'Too many failed attempts. Please request a new OTP.' }, { status: 400 })
             }
 
             if (stored.otp !== otp) {
                 stored.attempts++
                 return NextResponse.json({
+                    success: false,
                     error: 'Invalid OTP',
                     attemptsRemaining: MAX_ATTEMPTS - stored.attempts
                 }, { status: 400 })
@@ -87,16 +89,16 @@ export async function POST(request: NextRequest) {
             })
         }
 
-        return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+        return NextResponse.json({ success: false, error: 'Invalid action. Use: send or verify' }, { status: 400 })
 
     } catch (error) {
         console.error('OTP API Error:', error)
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+        return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 })
     }
 }
 
 // Normalize Kenyan phone numbers
-function normalizePhoneNumber(phone: string): string {
+function normalizeKenyanPhone(phone: string): string {
     let normalized = phone.replace(/\s+/g, '').replace(/[^0-9+]/g, '')
 
     if (normalized.startsWith('0')) {
@@ -110,13 +112,14 @@ function normalizePhoneNumber(phone: string): string {
     return normalized
 }
 
-// Send SMS via Africa's Talking
-async function sendSms(phone: string, otp: string): Promise<{ success: boolean; error?: string }> {
+// Send SMS via Africa's Talking API
+async function sendAfricasTalkingSms(phone: string, otp: string): Promise<{ success: boolean; error?: string }> {
     const message = `Your Alpha Energy verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`
 
-    // If no API key configured, simulate success (for development)
-    if (!AFRICASTALKING_API_KEY) {
-        console.log(`📱 [DEV] OTP ${otp} would be sent to ${phone}`)
+    // If no API key configured, log and simulate success (for development)
+    if (!AT_API_KEY) {
+        console.log(`📱 [DEV MODE] OTP ${otp} would be sent to ${phone}`)
+        console.log(`⚠️ Set AFRICASTALKING_API_KEY in Vercel Environment Variables to enable real SMS`)
         return { success: true }
     }
 
@@ -126,26 +129,33 @@ async function sendSms(phone: string, otp: string): Promise<{ success: boolean; 
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'apiKey': AFRICASTALKING_API_KEY,
+                'apiKey': AT_API_KEY,
             },
             body: new URLSearchParams({
-                username: AFRICASTALKING_USERNAME,
+                username: AT_USERNAME,
                 to: phone,
                 message: message,
-                from: AFRICASTALKING_SENDER_ID,
+                from: AT_SENDER_ID,
             }),
         })
 
         const result = await response.json()
+        console.log('Africa\'s Talking Response:', JSON.stringify(result, null, 2))
 
-        if (result.SMSMessageData?.Recipients?.[0]?.status === 'Success') {
+        // Check if SMS was sent successfully
+        const recipient = result.SMSMessageData?.Recipients?.[0]
+        if (recipient?.status === 'Success' || recipient?.statusCode === 101) {
+            console.log(`✅ SMS sent successfully to ${phone}`)
             return { success: true }
         } else {
             console.error('SMS API Error:', result)
-            return { success: false, error: result.SMSMessageData?.Message || 'Failed to send SMS' }
+            return {
+                success: false,
+                error: result.SMSMessageData?.Message || recipient?.status || 'Failed to send SMS'
+            }
         }
     } catch (error) {
-        console.error('SMS API Error:', error)
+        console.error('SMS API Connection Error:', error)
         return { success: false, error: 'Failed to connect to SMS service' }
     }
 }
