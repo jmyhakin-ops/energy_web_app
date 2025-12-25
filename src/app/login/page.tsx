@@ -14,28 +14,159 @@ import {
     Building2,
     BarChart3,
     Smartphone,
+    Shield,
+    KeyRound,
+    ArrowLeft,
+    CheckCircle,
+    Send,
+    RefreshCw,
 } from "lucide-react"
 import { toast } from "@/components/ui/toast"
+
+// Configuration - Update this URL to your PHP backend
+const SMS_API_URL = process.env.NEXT_PUBLIC_SMS_API_URL || "https://your-server.com/sms_otp.php"
+
+// OTP Configuration
+const OTP_LENGTH = 6
 
 export default function LoginPage() {
     const router = useRouter()
     const [showPassword, setShowPassword] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [step, setStep] = useState<"credentials" | "otp">("credentials")
+    const [otp, setOtp] = useState("")
+    const [userPhone, setUserPhone] = useState("")
+    const [resendTimer, setResendTimer] = useState(0)
     const [formData, setFormData] = useState({
         username: "",
         password: "",
         remember: false,
     })
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    // Start resend timer
+    const startResendTimer = () => {
+        setResendTimer(60)
+        const interval = setInterval(() => {
+            setResendTimer((prev) => {
+                if (prev <= 1) {
+                    clearInterval(interval)
+                    return 0
+                }
+                return prev - 1
+            })
+        }, 1000)
+    }
+
+    // Send OTP via PHP API
+    const sendOtp = async (phone: string) => {
+        try {
+            const response = await fetch(SMS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'send', phone })
+            })
+            const data = await response.json()
+            return data
+        } catch (error) {
+            console.error('Send OTP Error:', error)
+            return { success: false, error: 'Failed to connect to SMS service' }
+        }
+    }
+
+    // Verify OTP via PHP API
+    const verifyOtp = async (phone: string, otpCode: string) => {
+        try {
+            const response = await fetch(SMS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'verify', phone, otp: otpCode })
+            })
+            const data = await response.json()
+            return data
+        } catch (error) {
+            console.error('Verify OTP Error:', error)
+            return { success: false, error: 'Failed to connect to verification service' }
+        }
+    }
+
+    // Handle credentials submission
+    const handleCredentialsSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
 
-        // Simple login - no OTP
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-        toast.success("✅ Login Successful!", "Welcome to Alpha Energy")
+        try {
+            // TODO: Validate credentials against your database here
+            // For now, we'll proceed to OTP step
+            await new Promise((resolve) => setTimeout(resolve, 500))
+
+            // Get user's phone from database (mock for now - replace with real API call)
+            const mockUserPhone = "+254720316175" // Replace with actual user phone from DB
+            setUserPhone(mockUserPhone)
+
+            // Send OTP to user's phone
+            toast.success("📱 Sending OTP...", `To ${mockUserPhone.slice(0, 7)}****`)
+
+            const result = await sendOtp(mockUserPhone)
+
+            if (result.success) {
+                toast.success("✅ OTP Sent!", result.message || "Check your phone")
+                setStep("otp")
+                startResendTimer()
+            } else {
+                toast.error("❌ Failed to send OTP", result.error || "Please try again")
+            }
+
+        } catch (error) {
+            toast.error("Login Failed", "Invalid username or password")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // Handle OTP verification
+    const handleOtpSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setLoading(true)
+
+        try {
+            const result = await verifyOtp(userPhone, otp)
+
+            if (result.success) {
+                toast.success("✅ Login Successful!", "Welcome to Alpha Energy")
+                router.push("/dashboard")
+            } else {
+                toast.error("❌ " + (result.error || "Invalid OTP"), "Please try again")
+                setOtp("")
+            }
+        } catch (error) {
+            toast.error("Verification Failed", "Please try again")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // Resend OTP
+    const handleResendOtp = async () => {
+        if (resendTimer > 0) return
+
+        setLoading(true)
+        const result = await sendOtp(userPhone)
+
+        if (result.success) {
+            toast.success("✅ New OTP Sent!", result.message)
+            startResendTimer()
+        } else {
+            toast.error("Failed to resend", result.error)
+        }
         setLoading(false)
-        router.push("/dashboard")
+    }
+
+    // Handle OTP input
+    const handleOtpChange = (value: string) => {
+        const numericValue = value.replace(/\D/g, "")
+        if (numericValue.length <= OTP_LENGTH) {
+            setOtp(numericValue)
+        }
     }
 
     return (
@@ -54,96 +185,205 @@ export default function LoginPage() {
                         </div>
                     </Link>
 
-                    {/* Welcome Text */}
-                    <div className="mb-10">
-                        <h2 className="text-4xl font-extrabold text-gray-900 mb-3">
-                            Welcome back! 👋
-                        </h2>
-                        <p className="text-lg text-gray-500">
-                            Sign in to continue managing your stations
-                        </p>
-                    </div>
-
-                    {/* Form */}
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-3">
-                                Email or Username
-                            </label>
-                            <div className="relative">
-                                <div className="absolute left-0 top-0 bottom-0 w-14 flex items-center justify-center">
-                                    <Mail className="w-5 h-5 text-gray-400" />
-                                </div>
-                                <input
-                                    type="text"
-                                    value={formData.username}
-                                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                                    placeholder="Enter your email or username"
-                                    className="w-full pl-14 pr-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-gray-900 placeholder-gray-400 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
-                                    required
-                                />
+                    {/* Step 1: Credentials */}
+                    {step === "credentials" && (
+                        <>
+                            <div className="mb-10">
+                                <h2 className="text-4xl font-extrabold text-gray-900 mb-3">
+                                    Welcome back! 👋
+                                </h2>
+                                <p className="text-lg text-gray-500">
+                                    Sign in to continue managing your stations
+                                </p>
                             </div>
-                        </div>
 
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-3">
-                                Password
-                            </label>
-                            <div className="relative">
-                                <div className="absolute left-0 top-0 bottom-0 w-14 flex items-center justify-center">
-                                    <Lock className="w-5 h-5 text-gray-400" />
+                            <form onSubmit={handleCredentialsSubmit} className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                                        📧 Email or Username
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute left-0 top-0 bottom-0 w-14 flex items-center justify-center">
+                                            <Mail className="w-5 h-5 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={formData.username}
+                                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                                            placeholder="Enter your email or username"
+                                            className="w-full pl-14 pr-5 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-gray-900 placeholder-gray-400 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+                                            required
+                                        />
+                                    </div>
                                 </div>
-                                <input
-                                    type={showPassword ? "text" : "password"}
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    placeholder="Enter your password"
-                                    className="w-full pl-14 pr-14 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-gray-900 placeholder-gray-400 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
-                                    required
-                                />
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                                        🔒 Password
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute left-0 top-0 bottom-0 w-14 flex items-center justify-center">
+                                            <Lock className="w-5 h-5 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type={showPassword ? "text" : "password"}
+                                            value={formData.password}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                            placeholder="Enter your password"
+                                            className="w-full pl-14 pr-14 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl text-gray-900 placeholder-gray-400 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+                                            required
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-0 top-0 bottom-0 w-14 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+                                        >
+                                            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.remember}
+                                            onChange={(e) => setFormData({ ...formData, remember: e.target.checked })}
+                                            className="w-5 h-5 rounded-md border-2 border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
+                                        />
+                                        <span className="text-sm text-gray-600 font-medium">Remember me</span>
+                                    </label>
+                                    <a href="#" className="text-sm text-blue-600 hover:text-blue-700 font-semibold">
+                                        Forgot password?
+                                    </a>
+                                </div>
+
                                 <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-0 top-0 bottom-0 w-14 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full py-4 bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-bold text-lg rounded-2xl hover:shadow-xl hover:shadow-blue-500/30 disabled:opacity-70 transition-all duration-300 flex items-center justify-center gap-3"
                                 >
-                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    {loading ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Sending OTP...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Send className="w-5 h-5" />
+                                            Continue with OTP
+                                        </>
+                                    )}
                                 </button>
+                            </form>
+
+                            {/* Security Info */}
+                            <div className="mt-8 p-4 bg-green-50 border border-green-200 rounded-xl">
+                                <div className="flex items-center gap-2 text-green-700">
+                                    <Shield className="w-5 h-5" />
+                                    <span className="font-semibold">🔐 Secured with 2FA</span>
+                                </div>
+                                <p className="text-sm text-green-600 mt-1">
+                                    OTP will be sent to your registered phone number
+                                </p>
                             </div>
-                        </div>
+                        </>
+                    )}
 
-                        <div className="flex items-center justify-between">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={formData.remember}
-                                    onChange={(e) => setFormData({ ...formData, remember: e.target.checked })}
-                                    className="w-5 h-5 rounded-md border-2 border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-                                />
-                                <span className="text-sm text-gray-600 font-medium">Remember me</span>
-                            </label>
-                            <a href="#" className="text-sm text-blue-600 hover:text-blue-700 font-semibold">
-                                Forgot password?
-                            </a>
-                        </div>
+                    {/* Step 2: OTP Verification */}
+                    {step === "otp" && (
+                        <>
+                            <button
+                                onClick={() => { setStep("credentials"); setOtp("") }}
+                                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-8 transition-colors"
+                            >
+                                <ArrowLeft className="w-5 h-5" />
+                                Back to login
+                            </button>
 
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full py-4 bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-bold text-lg rounded-2xl hover:shadow-xl hover:shadow-blue-500/30 disabled:opacity-70 transition-all duration-300 flex items-center justify-center gap-3"
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Signing in...
-                                </>
-                            ) : (
-                                <>
-                                    Sign In
-                                    <ArrowRight className="w-5 h-5" />
-                                </>
-                            )}
-                        </button>
-                    </form>
+                            <div className="mb-8">
+                                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-6 shadow-xl shadow-green-500/30">
+                                    <Shield className="w-10 h-10 text-white" />
+                                </div>
+                                <h2 className="text-3xl font-extrabold text-gray-900 mb-3">
+                                    🔐 Verify OTP
+                                </h2>
+                                <p className="text-gray-500">
+                                    Enter the 6-digit code sent to:
+                                </p>
+                                <p className="font-bold text-gray-900 text-lg">
+                                    📱 {userPhone.slice(0, 7)}****{userPhone.slice(-2)}
+                                </p>
+                            </div>
+
+                            <form onSubmit={handleOtpSubmit} className="space-y-6">
+                                {/* OTP Input */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                                        Enter Verification Code
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute left-0 top-0 bottom-0 w-14 flex items-center justify-center">
+                                            <KeyRound className="w-5 h-5 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={otp}
+                                            onChange={(e) => handleOtpChange(e.target.value)}
+                                            placeholder="000000"
+                                            maxLength={OTP_LENGTH}
+                                            className="w-full pl-14 pr-5 py-5 bg-gray-50 border-2 border-gray-200 rounded-2xl text-gray-900 placeholder-gray-300 focus:bg-white focus:border-green-500 focus:ring-4 focus:ring-green-500/10 outline-none transition-all text-center text-3xl font-bold tracking-[0.5em]"
+                                            required
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-2 text-center">
+                                        Code expires in 5 minutes
+                                    </p>
+                                </div>
+
+                                {/* Verify Button */}
+                                <button
+                                    type="submit"
+                                    disabled={loading || otp.length !== OTP_LENGTH}
+                                    className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold text-lg rounded-2xl hover:shadow-xl hover:shadow-green-500/30 disabled:opacity-50 transition-all duration-300 flex items-center justify-center gap-3"
+                                >
+                                    {loading ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Verifying...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle className="w-5 h-5" />
+                                            Verify & Login
+                                        </>
+                                    )}
+                                </button>
+
+                                {/* Resend OTP */}
+                                <div className="text-center py-4">
+                                    <p className="text-gray-500 mb-2">Didn't receive the code?</p>
+                                    {resendTimer > 0 ? (
+                                        <p className="text-gray-400">
+                                            Resend in <span className="font-bold text-gray-700">{resendTimer}s</span>
+                                        </p>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={handleResendOtp}
+                                            disabled={loading}
+                                            className="inline-flex items-center gap-2 text-blue-600 font-bold hover:text-blue-700 transition-colors"
+                                        >
+                                            <RefreshCw className="w-4 h-4" />
+                                            Resend OTP
+                                        </button>
+                                    )}
+                                </div>
+                            </form>
+                        </>
+                    )}
 
                     {/* Contact Info */}
                     <div className="mt-10 p-6 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl border border-blue-100 text-center">
@@ -173,17 +413,34 @@ export default function LoginPage() {
 
                 <div className="relative z-10 flex flex-col items-center justify-center p-16 text-white w-full">
                     <div className="w-24 h-24 rounded-3xl bg-white/10 backdrop-blur-xl flex items-center justify-center mb-10 shadow-2xl">
-                        <Fuel className="w-12 h-12" />
+                        {step === "credentials" ? (
+                            <Fuel className="w-12 h-12" />
+                        ) : (
+                            <Shield className="w-12 h-12" />
+                        )}
                     </div>
 
                     <h2 className="text-4xl font-extrabold text-center mb-6">
-                        Alpha Energy App
-                        <br />
-                        <span className="text-cyan-300">Fuel Station Management</span>
+                        {step === "credentials" ? (
+                            <>
+                                Alpha Energy App
+                                <br />
+                                <span className="text-cyan-300">Fuel Station Management</span>
+                            </>
+                        ) : (
+                            <>
+                                Two-Factor
+                                <br />
+                                <span className="text-cyan-300">Authentication</span>
+                            </>
+                        )}
                     </h2>
 
                     <p className="text-xl text-blue-100 text-center max-w-md mb-12">
-                        The most powerful platform for multi-station management with M-Pesa integration.
+                        {step === "credentials"
+                            ? "Secure login with SMS verification to protect your account."
+                            : "Enter the code sent to your phone to complete login."
+                        }
                     </p>
 
                     <div className="flex flex-wrap justify-center gap-4 mb-12">
