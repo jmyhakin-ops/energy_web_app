@@ -123,20 +123,36 @@ async function sendAfricasTalkingSms(phone: string, otp: string): Promise<{ succ
         return { success: true }
     }
 
+    // Use sandbox API for sandbox mode
+    const isSandbox = AT_USERNAME.toLowerCase() === 'sandbox'
+    const apiUrl = isSandbox
+        ? 'https://api.sandbox.africastalking.com/version1/messaging'
+        : 'https://api.africastalking.com/version1/messaging'
+
+    console.log(`📱 Sending SMS via Africa's Talking (${isSandbox ? 'SANDBOX' : 'LIVE'} mode)`)
+    console.log(`📞 To: ${phone}`)
+
     try {
-        const response = await fetch('https://api.africastalking.com/version1/messaging', {
+        // Build request body - only include 'from' for live mode with approved sender ID
+        const bodyParams: Record<string, string> = {
+            username: AT_USERNAME,
+            to: phone,
+            message: message,
+        }
+
+        // Only add sender ID for live mode (sandbox ignores it)
+        if (!isSandbox && AT_SENDER_ID) {
+            bodyParams.from = AT_SENDER_ID
+        }
+
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'apiKey': AT_API_KEY,
             },
-            body: new URLSearchParams({
-                username: AT_USERNAME,
-                to: phone,
-                message: message,
-                from: AT_SENDER_ID,
-            }),
+            body: new URLSearchParams(bodyParams),
         })
 
         const result = await response.json()
