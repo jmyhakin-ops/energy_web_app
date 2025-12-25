@@ -21,7 +21,7 @@ const RATE_LIMIT_MAX = 100 // Max requests per window
 
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
-    const ip = request.ip || request.headers.get('x-forwarded-for') || 'unknown'
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
 
     // Rate limiting
     const now = Date.now()

@@ -146,7 +146,7 @@ function UserFormModal({
 }: {
     user: User | null;
     roles: UserRole[];
-    onSave: (user: Partial<User>) => Promise<void>;
+    onSave: (user: any) => Promise<void>;
     onClose: () => void
 }) {
     const isEditing = !!user
@@ -400,7 +400,7 @@ export default function UsersPage() {
         setLoading(false)
     }
 
-    const handleSaveUser = async (userData: Partial<User>) => {
+    const handleSaveUser = async (userData: any) => {
         if (selectedUser) {
             // Update
             if (isSupabaseConfigured() && supabase) {
@@ -601,8 +601,8 @@ export default function UsersPage() {
                                                     <td className="py-4 px-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white ${user.role_id === 1 ? "bg-purple-500" :
-                                                                    user.role_id === 2 ? "bg-blue-500" :
-                                                                        user.role_id === 3 ? "bg-green-500" : "bg-gray-400"
+                                                                user.role_id === 2 ? "bg-blue-500" :
+                                                                    user.role_id === 3 ? "bg-green-500" : "bg-gray-400"
                                                                 }`}>
                                                                 {user.full_name.charAt(0)}
                                                             </div>
@@ -620,9 +620,9 @@ export default function UsersPage() {
                                                     </td>
                                                     <td className="py-4 px-4">
                                                         <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold ${user.role_id === 1 ? "bg-purple-100 text-purple-700" :
-                                                                user.role_id === 2 ? "bg-blue-100 text-blue-700" :
-                                                                    user.role_id === 3 ? "bg-green-100 text-green-700" :
-                                                                        "bg-gray-100 text-gray-700"
+                                                            user.role_id === 2 ? "bg-blue-100 text-blue-700" :
+                                                                user.role_id === 3 ? "bg-green-100 text-green-700" :
+                                                                    "bg-gray-100 text-gray-700"
                                                             }`}>
                                                             <Shield className="w-3 h-3" />
                                                             {role?.role_name || "Unknown"}
@@ -632,8 +632,8 @@ export default function UsersPage() {
                                                         <button
                                                             onClick={() => handleToggleStatus(user)}
                                                             className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${user.is_active
-                                                                    ? "bg-green-100 text-green-700 hover:bg-green-200"
-                                                                    : "bg-red-100 text-red-700 hover:bg-red-200"
+                                                                ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                                                : "bg-red-100 text-red-700 hover:bg-red-200"
                                                                 }`}
                                                         >
                                                             {user.is_active ? (

@@ -184,8 +184,8 @@ function RoleFormModal({
                                 <label
                                     key={perm.id}
                                     className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${formData.permissions.includes(perm.id)
-                                            ? "bg-blue-50 border-2 border-blue-300"
-                                            : "bg-gray-50 border-2 border-transparent hover:border-gray-200"
+                                        ? "bg-blue-50 border-2 border-blue-300"
+                                        : "bg-gray-50 border-2 border-transparent hover:border-gray-200"
                                         }`}
                                 >
                                     <input
@@ -352,7 +352,7 @@ export default function RolesPage() {
                                                 <button
                                                     onClick={() => handleDeleteRole(role)}
                                                     className="p-2 hover:bg-red-100 rounded-lg text-red-600 transition-colors"
-                                                    disabled={role.user_count && role.user_count > 0}
+                                                    disabled={(role.user_count || 0) > 0}
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
