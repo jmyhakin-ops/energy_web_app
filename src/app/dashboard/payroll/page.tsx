@@ -15,7 +15,7 @@ import { formatCurrency } from "@/lib/utils"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 
 interface Employee {
-    id: string  // UUID from Supabase
+    id: string  // INT from users_new, stored as string for dropdown
     full_name: string
     phone_number: string
     national_id: string
@@ -28,7 +28,7 @@ interface Employee {
 interface PayrollRecord {
     payroll_id: number
     payroll_code: string
-    user_id: string  // UUID
+    user_id: number  // INT referencing users_new(user_id)
     pay_period: string
     basic_salary: number
     gross_salary: number
@@ -338,9 +338,10 @@ function GeneratePayrollModal({
 
         setLoading(true)
         try {
-            await onGenerate({
+            // Convert user_id to INT for users_new table
+            const payrollData = {
                 payroll_code: generatePayrollCode(),
-                user_id: selectedEmployee.id,
+                user_id: parseInt(selectedEmployee.id, 10),  // Convert to INT
                 pay_period: payPeriod,
                 basic_salary: formData.basic_salary,
                 overtime_pay: formData.overtime_pay,
@@ -356,7 +357,9 @@ function GeneratePayrollModal({
                 total_deductions: totalDeductions,
                 net_salary: netSalary,
                 payment_status: "pending",
-            })
+            }
+            console.log("[Payroll] Generating payroll:", payrollData)
+            await onGenerate(payrollData)
             onClose()
         } catch (error: any) {
             toast.error("Error", error.message)
@@ -578,31 +581,52 @@ export default function PayrollPage() {
         setLoading(true)
         try {
             if (isSupabaseConfigured() && supabase) {
-                const [empRes, payRes] = await Promise.all([
-                    supabase.from("users_new").select("user_id, full_name, mobile_no, national_id, monthly_salary, bank_name, bank_account, kra_pin").eq("is_active", true).order("full_name"),
-                    supabase.from("payroll").select("*, users_new(full_name)").eq("pay_period", payPeriod).order("created_at", { ascending: false }),
-                ])
-                // Map user_id to id for compatibility
-                const employees = (empRes.data || []).map((u: any) => ({
-                    id: u.user_id?.toString() || "",
-                    full_name: u.full_name,
-                    phone_number: u.mobile_no,
-                    national_id: u.national_id,
-                    monthly_salary: u.monthly_salary || 0,
-                    bank_name: u.bank_name,
-                    bank_account: u.bank_account,
-                    kra_pin: u.kra_pin,
-                }))
+                console.log("[Payroll] Fetching data for period:", payPeriod)
+
+                // Fetch employees
+                const empRes = await supabase
+                    .from("users_new")
+                    .select("user_id, full_name, mobile_no, national_id, monthly_salary, bank_name, bank_account, kra_pin")
+                    .eq("is_active", true)
+                    .order("full_name")
+
+                console.log("[Payroll] Employees:", empRes.error?.message || `Found ${empRes.data?.length || 0}`)
+
+                // Create employee lookup map
+                const employeeMap = new Map<number, string>()
+                const employees = (empRes.data || []).map((u: any) => {
+                    employeeMap.set(u.user_id, u.full_name)
+                    return {
+                        id: u.user_id?.toString() || "",
+                        full_name: u.full_name,
+                        phone_number: u.mobile_no,
+                        national_id: u.national_id,
+                        monthly_salary: u.monthly_salary || 0,
+                        bank_name: u.bank_name,
+                        bank_account: u.bank_account,
+                        kra_pin: u.kra_pin,
+                    }
+                })
                 setEmployees(employees)
-                // Map users_new to users for display
+
+                // Fetch payroll WITHOUT join (to avoid relation issues)
+                const payRes = await supabase
+                    .from("payroll")
+                    .select("*")
+                    .eq("pay_period", payPeriod)
+                    .order("created_at", { ascending: false })
+
+                console.log("[Payroll] Records:", payRes.error?.message || `Found ${payRes.data?.length || 0}`)
+
+                // Manually map employee names to payroll records
                 const payrollData = (payRes.data || []).map((p: any) => ({
                     ...p,
-                    users: p.users_new
+                    users: { full_name: employeeMap.get(p.user_id) || "-" }
                 }))
                 setPayrollRecords(payrollData)
             }
         } catch (error) {
-            console.error(error)
+            console.error("[Payroll] Fetch error:", error)
         }
         setLoading(false)
     }
