@@ -249,6 +249,7 @@ export default function DashboardPage() {
                     <div className="text-center">
                         <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
                         <p className="text-gray-500">Loading dashboard...</p>
+                        <p className="text-xs text-gray-400 mt-2">v2.0 - Payroll & Expenses Update</p>
                     </div>
                 </div>
             </DashboardLayout>
@@ -417,14 +418,14 @@ export default function DashboardPage() {
                                 <div className="space-y-3">
                                     {stations.map((station, index) => (
                                         <div key={station.station_id} className={`flex items-center gap-4 p-4 rounded-xl hover:scale-[1.01] transition-all ${index === 0 ? "bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200" :
-                                                index === 1 ? "bg-gradient-to-r from-slate-50 to-gray-100 border border-gray-200" :
-                                                    index === 2 ? "bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200" :
-                                                        "bg-white border border-gray-100"
+                                            index === 1 ? "bg-gradient-to-r from-slate-50 to-gray-100 border border-gray-200" :
+                                                index === 2 ? "bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200" :
+                                                    "bg-white border border-gray-100"
                                             }`}>
                                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${index === 0 ? 'bg-yellow-400 text-white' :
-                                                    index === 1 ? 'bg-gray-400 text-white' :
-                                                        index === 2 ? 'bg-orange-500 text-white' :
-                                                            'bg-gray-200 text-gray-600'
+                                                index === 1 ? 'bg-gray-400 text-white' :
+                                                    index === 2 ? 'bg-orange-500 text-white' :
+                                                        'bg-gray-200 text-gray-600'
                                                 }`}>
                                                 {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
                                             </div>
