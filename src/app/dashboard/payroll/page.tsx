@@ -287,14 +287,36 @@ function GeneratePayrollModal({
             setFormData(prev => ({ ...prev, basic_salary: emp.monthly_salary || 0 }))
             // Fetch approved salary advances for this employee in the current pay period
             await fetchSalaryAdvances(userId, payPeriod)
+            // Check if payroll already exists for this employee in the current pay period
+            await checkExistingPayroll(userId, payPeriod)
         }
     }
 
-    // Re-fetch advances when pay period changes
+    // Check if payroll already exists for employee in pay period
+    const [existingPayroll, setExistingPayroll] = useState<{ payroll_code: string; payment_status: string } | null>(null)
+
+    const checkExistingPayroll = async (userId: string, period: string) => {
+        if (!isSupabaseConfigured() || !supabase) return
+        try {
+            const { data } = await supabase
+                .from("payroll")
+                .select("payroll_code, payment_status")
+                .eq("user_id", parseInt(userId))
+                .eq("pay_period", period)
+                .single()
+
+            setExistingPayroll(data || null)
+        } catch {
+            setExistingPayroll(null)
+        }
+    }
+
+    // Re-fetch advances and check payroll when pay period changes
     const handlePayPeriodChange = async (period: string) => {
         setPayPeriod(period)
         if (selectedEmployee) {
             await fetchSalaryAdvances(selectedEmployee.id, period)
+            await checkExistingPayroll(selectedEmployee.id, period)
         }
     }
 
@@ -304,6 +326,16 @@ function GeneratePayrollModal({
             toast.error("Required", "Select an employee")
             return
         }
+
+        // Check if payroll already exists for this employee in this pay period
+        if (existingPayroll) {
+            toast.error(
+                "⚠️ Salary Already Processed!",
+                `Payroll ${existingPayroll.payroll_code} already exists for ${selectedEmployee.full_name} in ${payPeriod}. Status: ${existingPayroll.payment_status.toUpperCase()}`
+            )
+            return
+        }
+
         setLoading(true)
         try {
             await onGenerate({
@@ -374,6 +406,27 @@ function GeneratePayrollModal({
                             />
                         </div>
                     </div>
+
+                    {/* Warning: Payroll Already Exists */}
+                    {existingPayroll && selectedEmployee && (
+                        <div className="p-4 bg-red-100 border-2 border-red-300 rounded-xl">
+                            <div className="flex items-center gap-2 text-red-700">
+                                <AlertCircle className="w-5 h-5" />
+                                <span className="font-bold">⚠️ Salary Already Processed!</span>
+                            </div>
+                            <p className="text-sm text-red-600 mt-1">
+                                Payroll <span className="font-mono font-bold">{existingPayroll.payroll_code}</span> already exists for <span className="font-bold">{selectedEmployee.full_name}</span> in <span className="font-bold">{payPeriod}</span>.
+                            </p>
+                            <p className="text-xs text-red-500 mt-1">
+                                Status: <span className={`px-2 py-0.5 rounded ${existingPayroll.payment_status === "paid" ? "bg-green-200 text-green-800" : "bg-amber-200 text-amber-800"}`}>
+                                    {existingPayroll.payment_status === "paid" ? "✅ PAID" : "⏳ " + existingPayroll.payment_status.toUpperCase()}
+                                </span>
+                            </p>
+                            <p className="text-xs text-red-500 mt-2">
+                                💡 You cannot create another payroll for the same employee in the same pay period. Please select a different month.
+                            </p>
+                        </div>
+                    )}
 
                     {/* Earnings */}
                     <div>
@@ -491,8 +544,15 @@ function GeneratePayrollModal({
                     {/* Actions */}
                     <div className="flex gap-3 pt-2">
                         <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-                        <Button type="submit" loading={loading} variant="success" className="flex-1">
-                            <Save className="w-4 h-4" /> Generate Payroll
+                        <Button
+                            type="submit"
+                            loading={loading}
+                            disabled={!!existingPayroll}
+                            variant="success"
+                            className={`flex-1 ${existingPayroll ? "opacity-50 cursor-not-allowed" : ""}`}
+                        >
+                            <Save className="w-4 h-4" />
+                            {existingPayroll ? "Already Processed" : "Generate Payroll"}
                         </Button>
                     </div>
                 </form>
