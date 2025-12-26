@@ -5,10 +5,10 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-let supabase: ReturnType<typeof createClient> | null = null
-if (supabaseUrl && supabaseServiceKey) {
-    supabase = createClient(supabaseUrl, supabaseServiceKey)
-}
+// Create client with generic types disabled for flexibility
+const supabase = supabaseUrl && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey)
+    : null
 
 // GET - Fetch all roles from database
 export async function GET() {
@@ -40,9 +40,10 @@ export async function GET() {
 
         return NextResponse.json({ success: true, data })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         console.error('API Error:', error)
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+        return NextResponse.json({ success: false, error: errorMessage }, { status: 500 })
     }
 }
 
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
         const { data: existing } = await supabase
             .from('user_roles')
             .select('role_id')
-            .eq('role_name', role_name)
+            .eq('role_name', role_name as string)
             .single()
 
         if (existing) {
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
 
         const { data, error } = await supabase
             .from('user_roles')
-            .insert({ role_name })
+            .insert([{ role_name: role_name as string }])
             .select()
             .single()
 
@@ -84,9 +85,10 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({ success: true, data, message: 'Role created successfully' })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         console.error('API Error:', error)
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+        return NextResponse.json({ success: false, error: errorMessage }, { status: 500 })
     }
 }
 
@@ -111,8 +113,8 @@ export async function PUT(request: NextRequest) {
 
         const { data, error } = await supabase
             .from('user_roles')
-            .update({ role_name })
-            .eq('role_id', role_id)
+            .update({ role_name: role_name as string })
+            .eq('role_id', role_id as number)
             .select()
             .single()
 
@@ -123,9 +125,10 @@ export async function PUT(request: NextRequest) {
 
         return NextResponse.json({ success: true, data, message: 'Role updated successfully' })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         console.error('API Error:', error)
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+        return NextResponse.json({ success: false, error: errorMessage }, { status: 500 })
     }
 }
 
@@ -179,8 +182,9 @@ export async function DELETE(request: NextRequest) {
 
         return NextResponse.json({ success: true, message: 'Role deleted successfully' })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         console.error('API Error:', error)
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+        return NextResponse.json({ success: false, error: errorMessage }, { status: 500 })
     }
 }
