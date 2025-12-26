@@ -1,163 +1,453 @@
 "use client"
 
-import { useState } from "react"
-import { ColumnDef } from "@tanstack/react-table"
-import { Fuel, Plus, Building2, Droplet, Settings, Eye, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
+import { useState, useEffect } from "react"
+import {
+    Fuel, Plus, Building2, Droplet, Settings, Eye, CheckCircle, XCircle,
+    AlertTriangle, Loader2, RefreshCw, Save, X, Edit, Trash2
+} from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { DataGrid } from "@/components/ui/data-grid"
-import { StatCard } from "@/components/dashboard/stat-cards"
 import { toast } from "@/components/ui/toast"
-import { formatCurrency } from "@/lib/utils"
+import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 
+// Pump interface matching database schema
 interface Pump {
-    id: number
-    pumpNumber: string
-    station: string
-    fuelType: string
-    pricePerLiter: number
-    todaySales: number
-    litersDispensed: number
-    status: "active" | "inactive" | "maintenance"
+    pump_id: number
+    pump_name: string
+    is_active: boolean
+    station_id: number
+    created_at: string
+    station?: {
+        station_id: number
+        station_name: string
+        station_code: string
+    }
 }
 
-const mockPumps: Pump[] = [
-    { id: 1, pumpNumber: "P-001", station: "Westlands Station", fuelType: "Super Petrol", pricePerLiter: 160, todaySales: 85000, litersDispensed: 531, status: "active" },
-    { id: 2, pumpNumber: "P-002", station: "Westlands Station", fuelType: "Diesel", pricePerLiter: 150, todaySales: 72000, litersDispensed: 480, status: "active" },
-    { id: 3, pumpNumber: "P-003", station: "CBD Main", fuelType: "Super Petrol", pricePerLiter: 160, todaySales: 95000, litersDispensed: 594, status: "active" },
-    { id: 4, pumpNumber: "P-004", station: "CBD Main", fuelType: "Premium Petrol", pricePerLiter: 170, todaySales: 45000, litersDispensed: 265, status: "maintenance" },
-    { id: 5, pumpNumber: "P-005", station: "Mombasa Road", fuelType: "Diesel", pricePerLiter: 150, todaySales: 120000, litersDispensed: 800, status: "active" },
-    { id: 6, pumpNumber: "P-006", station: "Thika Road", fuelType: "Super Petrol", pricePerLiter: 160, todaySales: 0, litersDispensed: 0, status: "inactive" },
-]
+interface Station {
+    station_id: number
+    station_name: string
+    station_code: string
+}
 
-const columns: ColumnDef<Pump>[] = [
-    {
-        accessorKey: "pumpNumber",
-        header: "Pump",
-        cell: ({ row }) => (
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                    <Fuel className="w-5 h-5 text-green-600" />
+// Pump Form Modal
+function PumpFormModal({
+    pump,
+    stations,
+    onSave,
+    onClose,
+}: {
+    pump: Pump | null
+    stations: Station[]
+    onSave: (data: Partial<Pump>) => Promise<void>
+    onClose: () => void
+}) {
+    const isEditing = !!pump
+    const [loading, setLoading] = useState(false)
+    const [formData, setFormData] = useState({
+        pump_name: pump?.pump_name || "",
+        station_id: pump?.station_id || (stations[0]?.station_id || 0),
+        is_active: pump?.is_active ?? true,
+    })
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!formData.pump_name || !formData.station_id) {
+            toast.error("Error", "Pump name and station are required")
+            return
+        }
+        setLoading(true)
+        try {
+            await onSave(formData)
+            onClose()
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : "Failed to save"
+            toast.error("Error", errorMessage)
+        }
+        setLoading(false)
+    }
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                <div className="p-6 border-b border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                            {isEditing ? <Edit className="w-5 h-5 text-blue-600" /> : <Plus className="w-5 h-5 text-green-600" />}
+                            {isEditing ? "✏️ Edit Pump" : "➕ Add New Pump"}
+                        </h2>
+                        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+                            <X className="w-5 h-5 text-gray-500" />
+                        </button>
+                    </div>
                 </div>
-                <span className="font-mono font-bold">{row.getValue("pumpNumber")}</span>
-            </div>
-        ),
-    },
-    {
-        accessorKey: "station",
-        header: "Station",
-        cell: ({ row }) => (
-            <span className="flex items-center gap-1 text-sm">
-                <Building2 className="w-4 h-4 text-blue-600" /> {row.getValue("station")}
-            </span>
-        ),
-    },
-    {
-        accessorKey: "fuelType",
-        header: "Fuel Type",
-        cell: ({ row }) => {
-            const fuel = row.getValue("fuelType") as string
-            const colors: Record<string, string> = {
-                "Super Petrol": "bg-green-100 text-green-700",
-                "Diesel": "bg-amber-100 text-amber-700",
-                "Premium Petrol": "bg-blue-100 text-blue-700",
-            }
-            return (
-                <span className={`px-2 py-1 rounded-lg text-xs font-medium ${colors[fuel] || "bg-gray-100"}`}>
-                    ⛽ {fuel}
-                </span>
-            )
-        },
-    },
-    {
-        accessorKey: "pricePerLiter",
-        header: "Price/L",
-        cell: ({ row }) => <span className="font-medium">KES {row.getValue("pricePerLiter")}</span>,
-    },
-    {
-        accessorKey: "litersDispensed",
-        header: "Liters Today",
-        cell: ({ row }) => (
-            <span className="flex items-center gap-1">
-                <Droplet className="w-4 h-4 text-cyan-600" />
-                {(row.getValue("litersDispensed") as number).toLocaleString()} L
-            </span>
-        ),
-    },
-    {
-        accessorKey: "todaySales",
-        header: "Sales Today",
-        cell: ({ row }) => <span className="font-bold text-green-600">{formatCurrency(row.getValue("todaySales"))}</span>,
-    },
-    {
-        accessorKey: "status",
-        header: "Status",
-        cell: ({ row }) => {
-            const status = row.getValue("status") as string
-            const styles: Record<string, { bg: string; icon: React.ReactNode }> = {
-                active: { bg: "bg-green-100 text-green-700", icon: <CheckCircle className="w-3 h-3" /> },
-                inactive: { bg: "bg-red-100 text-red-700", icon: <XCircle className="w-3 h-3" /> },
-                maintenance: { bg: "bg-amber-100 text-amber-700", icon: <AlertTriangle className="w-3 h-3" /> },
-            }
-            const style = styles[status]
-            return (
-                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${style.bg}`}>
-                    {style.icon} {status.charAt(0).toUpperCase() + status.slice(1)}
-                </span>
-            )
-        },
-    },
-    {
-        id: "actions",
-        header: "Actions",
-        cell: ({ row }) => (
-            <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={() => toast.info("View", row.original.pumpNumber)}>
-                    <Eye className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => toast.info("Configure", row.original.pumpNumber)}>
-                    <Settings className="w-4 h-4" />
-                </Button>
-            </div>
-        ),
-    },
-]
 
+                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                    {/* Pump Name */}
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">⛽ Pump Name *</label>
+                        <input
+                            type="text"
+                            value={formData.pump_name}
+                            onChange={(e) => setFormData({ ...formData, pump_name: e.target.value })}
+                            placeholder="e.g., Pump 1 or P-001"
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                            required
+                        />
+                    </div>
+
+                    {/* Station */}
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">🏢 Station *</label>
+                        <select
+                            value={formData.station_id}
+                            onChange={(e) => setFormData({ ...formData, station_id: parseInt(e.target.value) })}
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none appearance-none bg-white"
+                            required
+                        >
+                            <option value="">Select a station</option>
+                            {stations.map((station) => (
+                                <option key={station.station_id} value={station.station_id}>
+                                    {station.station_name} ({station.station_code})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Active Status */}
+                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                        <div>
+                            <p className="font-semibold text-gray-900">🟢 Active Status</p>
+                            <p className="text-sm text-gray-500">Enable or disable this pump</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={formData.is_active}
+                                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                                className="sr-only peer"
+                            />
+                            <div className="w-14 h-7 bg-gray-300 peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all"></div>
+                        </label>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-3 pt-4">
+                        <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+                            <X className="w-4 h-4" /> Cancel
+                        </Button>
+                        <Button type="submit" loading={loading} className="flex-1">
+                            <Save className="w-4 h-4" /> {isEditing ? "Update Pump" : "Create Pump"}
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}
+
+// Main Pumps Page
 export default function PumpsPage() {
+    const [pumps, setPumps] = useState<Pump[]>([])
+    const [stations, setStations] = useState<Station[]>([])
+    const [loading, setLoading] = useState(true)
+    const [searchQuery, setSearchQuery] = useState("")
+    const [showFormModal, setShowFormModal] = useState(false)
+    const [selectedPump, setSelectedPump] = useState<Pump | null>(null)
+
+    useEffect(() => {
+        fetchData()
+    }, [])
+
+    const fetchData = async () => {
+        setLoading(true)
+        try {
+            if (isSupabaseConfigured() && supabase) {
+                // Fetch stations first
+                const { data: stationsData } = await supabase
+                    .from("stations")
+                    .select("station_id, station_name, station_code")
+                    .eq("is_active", true)
+                    .order("station_name")
+
+                setStations(stationsData || [])
+
+                // Fetch pumps with station info
+                const { data: pumpsData, error } = await supabase
+                    .from("pumps")
+                    .select("*, station:stations(station_id, station_name, station_code)")
+                    .order("pump_name")
+
+                if (error) throw error
+                setPumps(pumpsData || [])
+            } else {
+                toast.error("Database not configured", "Please configure Supabase")
+                setPumps([])
+            }
+        } catch (error) {
+            console.error("Error fetching data:", error)
+            toast.error("Error", "Failed to load data")
+            setPumps([])
+        }
+        setLoading(false)
+    }
+
+    const handleSavePump = async (data: Partial<Pump>) => {
+        if (!supabase) throw new Error("Database not configured")
+
+        if (selectedPump) {
+            // Update existing
+            const { error } = await supabase
+                .from("pumps")
+                .update(data)
+                .eq("pump_id", selectedPump.pump_id)
+
+            if (error) throw error
+            toast.success("✅ Pump Updated!", `${data.pump_name} has been updated`)
+        } else {
+            // Create new
+            const { error } = await supabase
+                .from("pumps")
+                .insert([data])
+
+            if (error) throw error
+            toast.success("✅ Pump Created!", `${data.pump_name} has been added`)
+        }
+
+        fetchData()
+    }
+
+    const handleDeletePump = async (pump: Pump) => {
+        if (!confirm(`Are you sure you want to delete "${pump.pump_name}"?`)) return
+
+        try {
+            if (!supabase) throw new Error("Database not configured")
+
+            const { error } = await supabase
+                .from("pumps")
+                .delete()
+                .eq("pump_id", pump.pump_id)
+
+            if (error) throw error
+            toast.success("🗑️ Pump Deleted", pump.pump_name)
+            fetchData()
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : "Failed to delete"
+            toast.error("Error", errorMessage)
+        }
+    }
+
+    const handleToggleActive = async (pump: Pump) => {
+        try {
+            if (!supabase) throw new Error("Database not configured")
+
+            const newStatus = !pump.is_active
+            const { error } = await supabase
+                .from("pumps")
+                .update({ is_active: newStatus })
+                .eq("pump_id", pump.pump_id)
+
+            if (error) throw error
+            toast.success(newStatus ? "✅ Pump Activated" : "⛔ Pump Deactivated", pump.pump_name)
+            fetchData()
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : "Failed to update"
+            toast.error("Error", errorMessage)
+        }
+    }
+
+    // Filter pumps
+    const filteredPumps = pumps.filter((pump) =>
+        pump.pump_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        pump.station?.station_name?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+
+    // Stats
     const stats = {
-        total: mockPumps.length,
-        active: mockPumps.filter(p => p.status === "active").length,
-        totalSales: mockPumps.reduce((acc, p) => acc + p.todaySales, 0),
-        totalLiters: mockPumps.reduce((acc, p) => acc + p.litersDispensed, 0),
+        total: pumps.length,
+        active: pumps.filter((p) => p.is_active).length,
+        inactive: pumps.filter((p) => !p.is_active).length,
     }
 
     return (
         <DashboardLayout>
             <div className="space-y-6">
+                {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">⛽ Pump Management</h1>
+                        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                            ⛽ Pump Management
+                        </h1>
                         <p className="text-gray-500">Monitor and configure all fuel pumps</p>
                     </div>
-                    <Button onClick={() => toast.info("Add Pump")}>
-                        <Plus className="w-4 h-4" /> Add Pump
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={fetchData}>
+                            <RefreshCw className="w-4 h-4" /> Refresh
+                        </Button>
+                        <Button onClick={() => { setSelectedPump(null); setShowFormModal(true) }}>
+                            <Plus className="w-4 h-4" /> Add Pump
+                        </Button>
+                    </div>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard title="Total Pumps" value={stats.total} icon={<Fuel className="w-5 h-5" />} iconBg="bg-green-100 text-green-600" />
-                    <StatCard title="Active" value={stats.active} change={8} icon={<CheckCircle className="w-5 h-5" />} iconBg="bg-blue-100 text-blue-600" />
-                    <StatCard title="Sales Today" value={formatCurrency(stats.totalSales)} change={15} icon={<span className="text-lg">💰</span>} iconBg="bg-purple-100 text-purple-600" />
-                    <StatCard title="Liters Dispensed" value={`${stats.totalLiters.toLocaleString()} L`} icon={<Droplet className="w-5 h-5" />} iconBg="bg-cyan-100 text-cyan-600" />
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-4">
+                    <Card>
+                        <CardContent className="p-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                                    <Fuel className="w-6 h-6 text-green-600" />
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                                    <p className="text-sm text-gray-500">Total Pumps</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardContent className="p-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                                    <CheckCircle className="w-6 h-6 text-blue-600" />
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
+                                    <p className="text-sm text-gray-500">Active</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardContent className="p-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
+                                    <XCircle className="w-6 h-6 text-red-600" />
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-bold text-gray-900">{stats.inactive}</p>
+                                    <p className="text-sm text-gray-500">Inactive</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
 
+                {/* Search */}
                 <Card>
-                    <CardContent className="p-6">
-                        <DataGrid columns={columns} data={mockPumps} searchPlaceholder="Search pumps..." title="All Pumps" subtitle={`${mockPumps.length} pumps`} onRefresh={() => toast.success("Refreshed!")} />
+                    <CardContent className="p-4">
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="🔍 Search pumps by name or station..."
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                        />
+                    </CardContent>
+                </Card>
+
+                {/* Pumps List */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>
+                            <Fuel className="w-5 h-5 text-green-600" />
+                            📋 All Pumps ({filteredPumps.length})
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {loading ? (
+                            <div className="flex items-center justify-center py-12">
+                                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                            </div>
+                        ) : filteredPumps.length === 0 ? (
+                            <div className="text-center py-12 text-gray-500">
+                                <Fuel className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                                <p>{pumps.length === 0 ? "No pumps found. Add your first pump!" : "No pumps match your search"}</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full min-w-[600px]">
+                                    <thead>
+                                        <tr className="border-b border-gray-200">
+                                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Pump</th>
+                                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Station</th>
+                                            <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                                            <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredPumps.map((pump) => (
+                                            <tr key={pump.pump_id} className="border-b border-gray-100 hover:bg-gray-50">
+                                                <td className="py-4 px-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+                                                            <Fuel className="w-5 h-5 text-green-600" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-semibold text-gray-900">{pump.pump_name}</p>
+                                                            <p className="text-xs text-gray-500">ID: {pump.pump_id}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <Building2 className="w-4 h-4 text-blue-600" />
+                                                        <span className="text-sm">{pump.station?.station_name || "—"}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4 text-center">
+                                                    <button
+                                                        onClick={() => handleToggleActive(pump)}
+                                                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${pump.is_active
+                                                            ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                                            : "bg-red-100 text-red-700 hover:bg-red-200"
+                                                            }`}
+                                                    >
+                                                        {pump.is_active ? (
+                                                            <><CheckCircle className="w-3 h-3" /> Active</>
+                                                        ) : (
+                                                            <><XCircle className="w-3 h-3" /> Inactive</>
+                                                        )}
+                                                    </button>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={() => { setSelectedPump(pump); setShowFormModal(true) }}
+                                                            className="p-2 hover:bg-blue-100 rounded-lg text-blue-600 transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeletePump(pump)}
+                                                            className="p-2 hover:bg-red-100 rounded-lg text-red-600 transition-colors"
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Modal */}
+            {showFormModal && (
+                <PumpFormModal
+                    pump={selectedPump}
+                    stations={stations}
+                    onSave={handleSavePump}
+                    onClose={() => { setShowFormModal(false); setSelectedPump(null) }}
+                />
+            )}
         </DashboardLayout>
     )
 }
