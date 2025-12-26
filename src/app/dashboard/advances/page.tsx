@@ -225,11 +225,22 @@ export default function SalaryAdvancesPage() {
         try {
             if (isSupabaseConfigured() && supabase) {
                 const [empRes, advRes] = await Promise.all([
-                    supabase.from("users").select("id, full_name, monthly_salary"),
-                    supabase.from("salary_advances").select("*, users(full_name, monthly_salary)").order("created_at", { ascending: false }),
+                    supabase.from("users_new").select("user_id, full_name, monthly_salary").eq("is_active", true).order("full_name"),
+                    supabase.from("salary_advances").select("*, users_new(full_name, monthly_salary)").order("created_at", { ascending: false }),
                 ])
-                setEmployees(empRes.data || [])
-                setAdvances(advRes.data || [])
+                // Map user_id to id for compatibility
+                const employees = (empRes.data || []).map((u: any) => ({
+                    id: u.user_id?.toString() || "",
+                    full_name: u.full_name,
+                    monthly_salary: u.monthly_salary || 0,
+                }))
+                setEmployees(employees)
+                // Map users_new to users for display
+                const advancesData = (advRes.data || []).map((a: any) => ({
+                    ...a,
+                    users: a.users_new
+                }))
+                setAdvances(advancesData)
             }
         } catch (error) {
             console.error(error)

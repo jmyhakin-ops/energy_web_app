@@ -238,8 +238,10 @@ function GeneratePayrollModal({
     onClose: () => void
 }) {
     const [loading, setLoading] = useState(false)
+    const [loadingAdvances, setLoadingAdvances] = useState(false)
     const [payPeriod, setPayPeriod] = useState(new Date().toISOString().slice(0, 7))
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
+    const [approvedAdvances, setApprovedAdvances] = useState<number>(0)
     const [formData, setFormData] = useState({
         basic_salary: 0,
         overtime_pay: 0,
@@ -254,11 +256,45 @@ function GeneratePayrollModal({
     const totalDeductions = tax.totalDeductions + formData.salary_advance + formData.other_deductions
     const netSalary = gross - totalDeductions
 
-    const handleEmployeeSelect = (userId: string) => {
+    // Fetch salary advances for selected employee
+    const fetchSalaryAdvances = async (userId: string, period: string) => {
+        if (!isSupabaseConfigured() || !supabase) return 0
+        setLoadingAdvances(true)
+        try {
+            const { data } = await supabase
+                .from("salary_advances")
+                .select("amount")
+                .eq("user_id", parseInt(userId))
+                .eq("repayment_month", period)
+                .eq("status", "approved")
+
+            const totalAdvances = (data || []).reduce((sum: number, a: any) => sum + (a.amount || 0), 0)
+            setApprovedAdvances(totalAdvances)
+            setFormData(prev => ({ ...prev, salary_advance: totalAdvances }))
+            return totalAdvances
+        } catch (error) {
+            console.error(error)
+            return 0
+        } finally {
+            setLoadingAdvances(false)
+        }
+    }
+
+    const handleEmployeeSelect = async (userId: string) => {
         const emp = employees.find(e => e.id === userId)
         if (emp) {
             setSelectedEmployee(emp)
             setFormData(prev => ({ ...prev, basic_salary: emp.monthly_salary || 0 }))
+            // Fetch approved salary advances for this employee in the current pay period
+            await fetchSalaryAdvances(userId, payPeriod)
+        }
+    }
+
+    // Re-fetch advances when pay period changes
+    const handlePayPeriodChange = async (period: string) => {
+        setPayPeriod(period)
+        if (selectedEmployee) {
+            await fetchSalaryAdvances(selectedEmployee.id, period)
         }
     }
 
@@ -332,7 +368,7 @@ function GeneratePayrollModal({
                             <input
                                 type="month"
                                 value={payPeriod}
-                                onChange={(e) => setPayPeriod(e.target.value)}
+                                onChange={(e) => handlePayPeriodChange(e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-200 rounded-xl"
                                 required
                             />
@@ -414,13 +450,19 @@ function GeneratePayrollModal({
                         <p className="text-sm font-bold text-orange-600 mb-2">💸 Other Deductions</p>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">Salary Advance</label>
+                                <label className="block text-xs text-gray-500 mb-1">
+                                    💸 Salary Advance {loadingAdvances && <span className="text-orange-500">(Loading...)</span>}
+                                    {approvedAdvances > 0 && <span className="text-orange-600 font-bold"> (Auto-loaded)</span>}
+                                </label>
                                 <input
                                     type="number"
                                     value={formData.salary_advance}
                                     onChange={(e) => setFormData({ ...formData, salary_advance: Number(e.target.value) })}
                                     className="w-full px-3 py-2 border border-orange-200 rounded-xl bg-orange-50"
                                 />
+                                {approvedAdvances > 0 && (
+                                    <p className="text-xs text-orange-600 mt-1">✅ Approved advance for {payPeriod}</p>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-xs text-gray-500 mb-1">Other Deductions</label>
@@ -477,11 +519,27 @@ export default function PayrollPage() {
         try {
             if (isSupabaseConfigured() && supabase) {
                 const [empRes, payRes] = await Promise.all([
-                    supabase.from("users").select("id, full_name, phone_number, national_id, monthly_salary, bank_name, bank_account, kra_pin"),
-                    supabase.from("payroll").select("*, users(full_name)").eq("pay_period", payPeriod).order("created_at", { ascending: false }),
+                    supabase.from("users_new").select("user_id, full_name, mobile_no, national_id, monthly_salary, bank_name, bank_account, kra_pin").eq("is_active", true).order("full_name"),
+                    supabase.from("payroll").select("*, users_new(full_name)").eq("pay_period", payPeriod).order("created_at", { ascending: false }),
                 ])
-                setEmployees(empRes.data || [])
-                setPayrollRecords(payRes.data || [])
+                // Map user_id to id for compatibility
+                const employees = (empRes.data || []).map((u: any) => ({
+                    id: u.user_id?.toString() || "",
+                    full_name: u.full_name,
+                    phone_number: u.mobile_no,
+                    national_id: u.national_id,
+                    monthly_salary: u.monthly_salary || 0,
+                    bank_name: u.bank_name,
+                    bank_account: u.bank_account,
+                    kra_pin: u.kra_pin,
+                }))
+                setEmployees(employees)
+                // Map users_new to users for display
+                const payrollData = (payRes.data || []).map((p: any) => ({
+                    ...p,
+                    users: p.users_new
+                }))
+                setPayrollRecords(payrollData)
             }
         } catch (error) {
             console.error(error)

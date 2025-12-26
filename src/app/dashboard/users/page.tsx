@@ -27,6 +27,12 @@ interface User {
     is_active: boolean
     created_at: string
     role?: UserRole
+    // Payroll fields
+    national_id?: string | null
+    monthly_salary?: number
+    bank_name?: string | null
+    bank_account?: string | null
+    kra_pin?: string | null
 }
 
 // Mock data for demo
@@ -161,6 +167,12 @@ function UserFormModal({
         mobile_no: user?.mobile_no || "",
         role_id: user?.role_id || roles[0]?.role_id || 1,
         is_active: user?.is_active ?? true,
+        // Payroll fields
+        national_id: user?.national_id || "",
+        monthly_salary: user?.monthly_salary || 0,
+        bank_name: user?.bank_name || "",
+        bank_account: user?.bank_account || "",
+        kra_pin: user?.kra_pin || "",
     })
 
     const handlePhoneChange = (value: string) => {
@@ -325,6 +337,63 @@ function UserFormModal({
                         </div>
                     </div>
 
+                    {/* Payroll Information */}
+                    <div className="border-t border-gray-200 pt-4">
+                        <p className="text-sm font-bold text-green-600 mb-3">💰 Payroll Information</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs text-gray-600 mb-1">🪪 National ID</label>
+                                <input
+                                    type="text"
+                                    value={formData.national_id}
+                                    onChange={(e) => setFormData({ ...formData, national_id: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                                    placeholder="e.g. 12345678"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-600 mb-1">💵 Monthly Salary (KES)</label>
+                                <input
+                                    type="number"
+                                    value={formData.monthly_salary || ""}
+                                    onChange={(e) => setFormData({ ...formData, monthly_salary: parseFloat(e.target.value) || 0 })}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                                    placeholder="e.g. 50000"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-600 mb-1">📋 KRA PIN</label>
+                                <input
+                                    type="text"
+                                    value={formData.kra_pin}
+                                    onChange={(e) => setFormData({ ...formData, kra_pin: e.target.value.toUpperCase() })}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                                    placeholder="e.g. A012345678B"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-600 mb-1">🏦 Bank Name</label>
+                                <input
+                                    type="text"
+                                    value={formData.bank_name}
+                                    onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                                    placeholder="e.g. KCB Bank"
+                                />
+                            </div>
+                            <div className="col-span-2">
+                                <label className="block text-xs text-gray-600 mb-1">💳 Bank Account Number</label>
+                                <input
+                                    type="text"
+                                    value={formData.bank_account}
+                                    onChange={(e) => setFormData({ ...formData, bank_account: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                                    placeholder="e.g. 1234567890"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Active Status */}
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                         <div>
@@ -412,6 +481,12 @@ export default function UsersPage() {
                         mobile_no: userData.mobile_no,
                         role_id: userData.role_id,
                         is_active: userData.is_active,
+                        // Payroll fields
+                        national_id: userData.national_id || null,
+                        monthly_salary: userData.monthly_salary || 0,
+                        bank_name: userData.bank_name || null,
+                        bank_account: userData.bank_account || null,
+                        kra_pin: userData.kra_pin || null,
                     })
                     .eq("user_id", selectedUser.user_id)
                 if (error) throw error
@@ -429,6 +504,12 @@ export default function UsersPage() {
                         mobile_no: userData.mobile_no,
                         role_id: userData.role_id,
                         is_active: userData.is_active,
+                        // Payroll fields
+                        national_id: userData.national_id || null,
+                        monthly_salary: userData.monthly_salary || 0,
+                        bank_name: userData.bank_name || null,
+                        bank_account: userData.bank_account || null,
+                        kra_pin: userData.kra_pin || null,
                     })
                 if (error) throw error
             }
