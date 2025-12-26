@@ -13,7 +13,7 @@ import { formatCurrency } from "@/lib/utils"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 
 interface Employee {
-    id: string  // String in frontend - actual DB type is INT (users_new.user_id)
+    id: string  // UUID from users table
     full_name: string
     monthly_salary: number
 }
@@ -21,7 +21,7 @@ interface Employee {
 interface SalaryAdvance {
     advance_id: number
     advance_code: string
-    user_id: number  // INT in database
+    user_id: string  // UUID referencing users(id)
     amount: number
     request_date: string
     approved_date: string | null
@@ -78,10 +78,10 @@ function AddAdvanceModal({
 
         setLoading(true)
         try {
-            // Convert user_id to integer for database (users_new.user_id is INT type)
+            // user_id is UUID referencing users(id) table
             await onSave({
                 advance_code: generateAdvanceCode(),
-                user_id: parseInt(formData.user_id, 10),  // Convert string to INT
+                user_id: formData.user_id,  // UUID string - no conversion needed
                 amount: formData.amount,
                 reason: formData.reason,
                 repayment_month: formData.repayment_month,
@@ -227,20 +227,21 @@ export default function SalaryAdvancesPage() {
         try {
             if (isSupabaseConfigured() && supabase) {
                 const [empRes, advRes] = await Promise.all([
-                    supabase.from("users_new").select("user_id, full_name, monthly_salary").eq("is_active", true).order("full_name"),
-                    supabase.from("salary_advances").select("*, users_new(full_name, monthly_salary)").order("created_at", { ascending: false }),
+                    // Use 'users' table (UUID) - salary_advances references users(id)
+                    supabase.from("users").select("id, name, monthly_salary").eq("is_active", true).order("name"),
+                    supabase.from("salary_advances").select("*, users(name, monthly_salary)").order("created_at", { ascending: false }),
                 ])
-                // Map user_id to id for compatibility
+                // Map to Employee interface - users table has UUID 'id'
                 const employees = (empRes.data || []).map((u: any) => ({
-                    id: u.user_id?.toString() || "",
-                    full_name: u.full_name,
+                    id: u.id || "",
+                    full_name: u.name,
                     monthly_salary: u.monthly_salary || 0,
                 }))
                 setEmployees(employees)
-                // Map users_new to users for display
+                // Map users relation for display
                 const advancesData = (advRes.data || []).map((a: any) => ({
                     ...a,
-                    users: a.users_new
+                    users: a.users ? { full_name: a.users.name, monthly_salary: a.users.monthly_salary } : null
                 }))
                 setAdvances(advancesData)
             }
