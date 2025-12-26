@@ -185,7 +185,7 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen flex">
+        <div className="min-h-screen flex login-no-scroll no-scrollbar">
             {/* Left Side - Form */}
             <div className="flex-1 flex flex-col justify-center px-8 lg:px-20 py-12 bg-white">
                 <div className="w-full max-w-md mx-auto">

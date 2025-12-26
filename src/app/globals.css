@@ -114,3 +114,23 @@
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
+
+/* Hide scrollbar utility for login page */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  /* Chrome, Safari and Opera */
+}
+
+/* Login page - prevent any scrolling */
+.login-no-scroll {
+  overflow: hidden;
+  height: 100vh;
+  max-height: 100vh;
+}
