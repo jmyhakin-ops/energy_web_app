@@ -21,7 +21,7 @@ interface Employee {
 interface SalaryAdvance {
     advance_id: number
     advance_code: string
-    user_id: string  // UUID referencing users(id)
+    user_id: number  // INT referencing users_new(user_id)
     amount: number
     request_date: string
     approved_date: string | null
@@ -78,19 +78,25 @@ function AddAdvanceModal({
 
         setLoading(true)
         try {
-            // user_id is UUID referencing users(id) table
-            await onSave({
+            // user_id is INT referencing users_new(user_id) table
+            const advanceData = {
                 advance_code: generateAdvanceCode(),
-                user_id: formData.user_id,  // UUID string - no conversion needed
+                user_id: parseInt(formData.user_id, 10),  // Convert string to INT for users_new
                 amount: formData.amount,
                 reason: formData.reason,
                 repayment_month: formData.repayment_month,
                 notes: formData.notes,
                 status: "pending",
                 request_date: new Date().toISOString(),
-            })
+            }
+
+            console.log("[SalaryAdvances] Submitting advance:", advanceData)
+            console.log("[SalaryAdvances] user_id INT value:", advanceData.user_id)
+
+            await onSave(advanceData)
             onClose()
         } catch (error: any) {
+            console.error("[SalaryAdvances] Submit error:", error)
             toast.error("Error", error.message)
         }
         setLoading(false)
@@ -226,35 +232,53 @@ export default function SalaryAdvancesPage() {
         setLoading(true)
         try {
             if (isSupabaseConfigured() && supabase) {
+                console.log("[SalaryAdvances] Fetching data from users_new table...")
+
                 const [empRes, advRes] = await Promise.all([
-                    // Use 'users' table (UUID) - salary_advances references users(id)
-                    supabase.from("users").select("id, name, monthly_salary").eq("is_active", true).order("name"),
-                    supabase.from("salary_advances").select("*, users(name, monthly_salary)").order("created_at", { ascending: false }),
+                    // Use users_new table (user_id is INT)
+                    supabase.from("users_new").select("user_id, full_name, monthly_salary").eq("is_active", true).order("full_name"),
+                    supabase.from("salary_advances").select("*, users_new(full_name, monthly_salary)").order("created_at", { ascending: false }),
                 ])
-                // Map to Employee interface - users table has UUID 'id'
+
+                console.log("[SalaryAdvances] Employees response:", empRes.error || `Found ${empRes.data?.length || 0} employees`)
+                console.log("[SalaryAdvances] Advances response:", advRes.error || `Found ${advRes.data?.length || 0} advances`)
+
+                // Map user_id (INT) to id (string) for dropdown compatibility
                 const employees = (empRes.data || []).map((u: any) => ({
-                    id: u.id || "",
-                    full_name: u.name,
+                    id: u.user_id?.toString() || "",
+                    full_name: u.full_name,
                     monthly_salary: u.monthly_salary || 0,
                 }))
                 setEmployees(employees)
-                // Map users relation for display
+
+                // Map users_new to users for display
                 const advancesData = (advRes.data || []).map((a: any) => ({
                     ...a,
-                    users: a.users ? { full_name: a.users.name, monthly_salary: a.users.monthly_salary } : null
+                    users: a.users_new ? { full_name: a.users_new.full_name, monthly_salary: a.users_new.monthly_salary } : null
                 }))
                 setAdvances(advancesData)
             }
         } catch (error) {
-            console.error(error)
+            console.error("[SalaryAdvances] Fetch error:", error)
         }
         setLoading(false)
     }
 
     const handleSaveAdvance = async (data: any) => {
         if (!isSupabaseConfigured() || !supabase) return
-        const { error } = await supabase.from("salary_advances").insert([data])
-        if (error) throw error
+
+        // Debug logging for Vercel
+        console.log("[SalaryAdvances] Saving advance with data:", JSON.stringify(data, null, 2))
+        console.log("[SalaryAdvances] user_id type:", typeof data.user_id, "value:", data.user_id)
+
+        const { data: insertedData, error } = await supabase.from("salary_advances").insert([data]).select()
+
+        if (error) {
+            console.error("[SalaryAdvances] Insert error:", error.message, error.details, error.hint)
+            throw error
+        }
+
+        console.log("[SalaryAdvances] Insert success:", insertedData)
         toast.success("Success", "Salary advance request submitted!")
         fetchData()
     }

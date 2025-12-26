@@ -277,7 +277,7 @@ export default function DashboardPage() {
                             <Activity className="w-7 h-7 text-blue-600" />
                             {getGreeting()} 👋
                         </h1>
-                        <p className="text-gray-500">Here's what's happening across your stations today</p>
+                        <p className="text-gray-500">Here's what's happening across your stations today - v2.1</p>
                     </div>
                     <div className="flex items-center gap-3">
                         <LiveStatus isOnline={stats.stationsOnline > 0} label={`${stats.stationsOnline}/${stats.stationsTotal} Online`} />
