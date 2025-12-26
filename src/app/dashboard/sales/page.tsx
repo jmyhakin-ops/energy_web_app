@@ -54,12 +54,20 @@ interface User {
     full_name: string
 }
 
+// Generate receipt code like RCP-00001, RCP-00002, etc.
+function generateReceiptCode(count: number): string {
+    const nextNum = count + 1
+    const paddedNum = nextNum.toString().padStart(5, "0")
+    return `RCP-${paddedNum}`
+}
+
 // Add Sale Modal
 function AddSaleModal({
     stations,
     pumps,
     fuelTypes,
     users,
+    nextSaleNumber,
     onSave,
     onClose,
 }: {
@@ -67,11 +75,14 @@ function AddSaleModal({
     pumps: Pump[]
     fuelTypes: FuelType[]
     users: User[]
+    nextSaleNumber: number
     onSave: (data: any) => Promise<void>
     onClose: () => void
 }) {
     const [loading, setLoading] = useState(false)
+    const receiptNumber = generateReceiptCode(nextSaleNumber)
     const [formData, setFormData] = useState({
+        receipt_no: receiptNumber,
         station_id: stations[0]?.station_id || 0,
         pump_id: 0,
         fuel_type_id: fuelTypes[0]?.fuel_type_id || 0,
@@ -123,6 +134,18 @@ function AddSaleModal({
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    {/* Receipt Number */}
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">🧾 Receipt No (Auto)</label>
+                        <input
+                            type="text"
+                            value={formData.receipt_no}
+                            readOnly
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-100 text-gray-600 cursor-not-allowed font-mono"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Auto-generated</p>
+                    </div>
+
                     {/* Station */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">🏢 Station *</label>
@@ -521,6 +544,7 @@ export default function SalesPage() {
                     pumps={pumps}
                     fuelTypes={fuelTypes}
                     users={users}
+                    nextSaleNumber={sales.length}
                     onSave={handleAddSale}
                     onClose={() => setShowAddModal(false)}
                 />
