@@ -20,6 +20,7 @@ import {
     TrendingUp,
     UserCog,
     Shield,
+    Droplet,
 } from "lucide-react"
 import { toast } from "@/components/ui/toast"
 
@@ -28,6 +29,7 @@ const navItems = [
     { label: "Dashboard", icon: BarChart3, href: "/dashboard" },
     { label: "Stations", icon: Building2, href: "/dashboard/stations" },
     { label: "Pumps", icon: Fuel, href: "/dashboard/pumps" },
+    { label: "Fuel Types", icon: Droplet, href: "/dashboard/fuel-types" },
     { label: "Attendants", icon: Users, href: "/dashboard/attendants" },
     { label: "Shifts", icon: Clock, href: "/dashboard/shifts" },
     { label: "Sales", icon: Wallet, href: "/dashboard/sales" },
