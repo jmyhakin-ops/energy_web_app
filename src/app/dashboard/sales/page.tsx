@@ -61,7 +61,7 @@ function generateReceiptCode(count: number): string {
     return `RCP-${paddedNum}`
 }
 
-// Add Sale Modal
+// Add Sale Modal - Amount-based calculation
 function AddSaleModal({
     stations,
     pumps,
@@ -86,123 +86,143 @@ function AddSaleModal({
         station_id: stations[0]?.station_id || 0,
         pump_id: 0,
         fuel_type_id: fuelTypes[0]?.fuel_type_id || 0,
-        attendant_id: users[0]?.user_id || 0,
-        liters_sold: 0,
+        attendant_id: 0,
+        total_amount: 0, // User enters this
         payment_method: "cash",
         mpesa_transaction_id: "",
     })
 
     const filteredPumps = pumps.filter(p => p.station_id === formData.station_id)
     const selectedFuel = fuelTypes.find(f => f.fuel_type_id === formData.fuel_type_id)
-    const totalAmount = formData.liters_sold * (selectedFuel?.price_per_liter || 0)
+    const pricePerLiter = selectedFuel?.price_per_liter || 0
+
+    // Auto-calculate liters from amount
+    const litersSold = pricePerLiter > 0 ? formData.total_amount / pricePerLiter : 0
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!formData.pump_id || !formData.liters_sold) {
-            toast.error("Error", "Please fill all required fields")
+        if (!formData.pump_id || !formData.total_amount) {
+            toast.error("Required", "Select pump and enter amount")
             return
         }
         setLoading(true)
         try {
             await onSave({
                 ...formData,
-                price_per_liter: selectedFuel?.price_per_liter || 0,
-                total_amount: totalAmount,
+                liters_sold: litersSold,
+                price_per_liter: pricePerLiter,
                 sale_time: new Date().toISOString(),
             })
             onClose()
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : "Failed to save"
+            const errorMessage = error instanceof Error ? error.message : "Failed"
             toast.error("Error", errorMessage)
         }
         setLoading(false)
     }
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-                <div className="p-6 border-b border-gray-100">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            <Plus className="w-5 h-5 text-green-600" />
-                            ➕ Record New Sale
-                        </h2>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
-                            <X className="w-5 h-5 text-gray-500" />
-                        </button>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+                <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900">Record New Sale</h2>
+                        <p className="text-sm text-gray-500 font-mono">{receiptNumber}</p>
                     </div>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl">
+                        <X className="w-5 h-5 text-gray-400" />
+                    </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {/* Receipt Number */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">🧾 Receipt No (Auto)</label>
-                        <input
-                            type="text"
-                            value={formData.receipt_no}
-                            readOnly
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-100 text-gray-600 cursor-not-allowed font-mono"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Auto-generated</p>
+                <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                    {/* Station & Pump */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Station</label>
+                            <select
+                                value={formData.station_id}
+                                onChange={(e) => setFormData({ ...formData, station_id: parseInt(e.target.value), pump_id: 0 })}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white"
+                            >
+                                {stations.map((s) => (
+                                    <option key={s.station_id} value={s.station_id}>{s.station_name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Pump</label>
+                            <select
+                                value={formData.pump_id}
+                                onChange={(e) => setFormData({ ...formData, pump_id: parseInt(e.target.value) })}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white"
+                                required
+                            >
+                                <option value="">Select</option>
+                                {filteredPumps.map((p) => (
+                                    <option key={p.pump_id} value={p.pump_id}>{p.pump_name}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
-                    {/* Station */}
+                    {/* Fuel Type - Visual Selection */}
                     <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">🏢 Station *</label>
-                        <select
-                            value={formData.station_id}
-                            onChange={(e) => setFormData({ ...formData, station_id: parseInt(e.target.value), pump_id: 0 })}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none appearance-none bg-white"
-                            required
-                        >
-                            <option value="">Select station</option>
-                            {stations.map((s) => (
-                                <option key={s.station_id} value={s.station_id}>{s.station_name}</option>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Fuel Type</label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {fuelTypes.slice(0, 6).map((ft) => (
+                                <button
+                                    key={ft.fuel_type_id}
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, fuel_type_id: ft.fuel_type_id })}
+                                    className={`p-2 rounded-xl border-2 text-center transition-all ${formData.fuel_type_id === ft.fuel_type_id
+                                        ? "border-blue-500 bg-blue-50"
+                                        : "border-gray-200 hover:border-gray-300"
+                                        }`}
+                                >
+                                    <p className="text-xs font-medium truncate">{ft.fuel_name}</p>
+                                    <p className="text-xs text-gray-500">{formatCurrency(ft.price_per_liter)}/L</p>
+                                </button>
                             ))}
-                        </select>
+                        </div>
                     </div>
 
-                    {/* Pump */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">⛽ Pump *</label>
-                        <select
-                            value={formData.pump_id}
-                            onChange={(e) => setFormData({ ...formData, pump_id: parseInt(e.target.value) })}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none appearance-none bg-white"
-                            required
-                        >
-                            <option value="">Select pump</option>
-                            {filteredPumps.map((p) => (
-                                <option key={p.pump_id} value={p.pump_id}>{p.pump_name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Fuel Type */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">🛢️ Fuel Type *</label>
-                        <select
-                            value={formData.fuel_type_id}
-                            onChange={(e) => setFormData({ ...formData, fuel_type_id: parseInt(e.target.value) })}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none appearance-none bg-white"
-                            required
-                        >
-                            {fuelTypes.map((f) => (
-                                <option key={f.fuel_type_id} value={f.fuel_type_id}>
-                                    {f.fuel_name} - {formatCurrency(f.price_per_liter)}/L
-                                </option>
-                            ))}
-                        </select>
+                    {/* Amount & Liters - Side by Side */}
+                    <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* Amount Input */}
+                            <div>
+                                <label className="block text-sm font-medium text-green-700 mb-1">💰 Amount (KES)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={formData.total_amount || ""}
+                                    onChange={(e) => setFormData({ ...formData, total_amount: parseFloat(e.target.value) || 0 })}
+                                    placeholder="Enter amount"
+                                    className="w-full px-3 py-3 text-xl font-bold border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center bg-white"
+                                    autoFocus
+                                />
+                            </div>
+                            {/* Liters Display */}
+                            <div>
+                                <label className="block text-sm font-medium text-blue-700 mb-1">⛽ Liters (Auto)</label>
+                                <div className="w-full px-3 py-3 text-xl font-bold border-2 border-blue-200 rounded-xl bg-blue-50 text-center text-blue-700">
+                                    {litersSold.toFixed(2)} L
+                                </div>
+                            </div>
+                        </div>
+                        {/* Price info */}
+                        <p className="text-xs text-gray-500 mt-2 text-center">
+                            Price: {formatCurrency(pricePerLiter)}/L → {formData.total_amount > 0 ? `${formatCurrency(formData.total_amount)} ÷ ${formatCurrency(pricePerLiter)} = ${litersSold.toFixed(2)}L` : "Enter amount to calculate liters"}
+                        </p>
                     </div>
 
                     {/* Attendant */}
                     <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">👤 Attendant *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Attendant</label>
                         <select
                             value={formData.attendant_id}
                             onChange={(e) => setFormData({ ...formData, attendant_id: parseInt(e.target.value) })}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none appearance-none bg-white"
-                            required
+                            className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white"
                         >
                             <option value="">Select attendant</option>
                             {users.map((u) => (
@@ -211,68 +231,50 @@ function AddSaleModal({
                         </select>
                     </div>
 
-                    {/* Liters */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">📊 Liters *</label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            value={formData.liters_sold}
-                            onChange={(e) => setFormData({ ...formData, liters_sold: parseFloat(e.target.value) || 0 })}
-                            placeholder="Enter liters sold"
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none"
-                            required
-                        />
-                    </div>
-
                     {/* Payment Method */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">💳 Payment Method *</label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {["cash", "mpesa", "card"].map((method) => (
-                                <button
-                                    key={method}
-                                    type="button"
-                                    onClick={() => setFormData({ ...formData, payment_method: method })}
-                                    className={`p-3 rounded-xl border-2 text-center font-medium transition-colors ${formData.payment_method === method
-                                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                                        : "border-gray-200 hover:border-gray-300"
-                                        }`}
-                                >
-                                    {method === "cash" && "💵 Cash"}
-                                    {method === "mpesa" && "📱 M-Pesa"}
-                                    {method === "card" && "💳 Card"}
-                                </button>
-                            ))}
-                        </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, payment_method: "cash" })}
+                            className={`p-3 rounded-xl border-2 text-center transition-all ${formData.payment_method === "cash"
+                                ? "border-green-500 bg-green-50"
+                                : "border-gray-200"
+                                }`}
+                        >
+                            <span className="text-xl">💵</span>
+                            <p className="text-sm font-medium">Cash</p>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, payment_method: "mpesa" })}
+                            className={`p-3 rounded-xl border-2 text-center transition-all ${formData.payment_method === "mpesa"
+                                ? "border-green-500 bg-green-50"
+                                : "border-gray-200"
+                                }`}
+                        >
+                            <span className="text-xl">📱</span>
+                            <p className="text-sm font-medium">M-Pesa</p>
+                        </button>
                     </div>
 
-                    {/* M-Pesa Transaction ID */}
+                    {/* M-Pesa Receipt */}
                     {formData.payment_method === "mpesa" && (
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">📱 M-Pesa Transaction ID</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">M-Pesa Receipt</label>
                             <input
                                 type="text"
                                 value={formData.mpesa_transaction_id}
                                 onChange={(e) => setFormData({ ...formData, mpesa_transaction_id: e.target.value.toUpperCase() })}
-                                placeholder="e.g., RGK7H84KLM"
-                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                                placeholder="e.g., SG12AB34CD"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-xl"
                             />
                         </div>
                     )}
 
-                    {/* Total Amount Display */}
-                    <div className="p-4 bg-green-50 rounded-xl border-2 border-green-200">
-                        <p className="text-sm text-green-700">Total Amount</p>
-                        <p className="text-2xl font-bold text-green-700">{formatCurrency(totalAmount)}</p>
-                    </div>
-
                     {/* Actions */}
-                    <div className="flex gap-3 pt-4">
-                        <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-                            <X className="w-4 h-4" /> Cancel
-                        </Button>
-                        <Button type="submit" loading={loading} className="flex-1">
+                    <div className="flex gap-3 pt-2">
+                        <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+                        <Button type="submit" loading={loading} variant="success" className="flex-1">
                             <Save className="w-4 h-4" /> Record Sale
                         </Button>
                     </div>

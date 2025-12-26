@@ -21,6 +21,9 @@ import {
     UserCog,
     Shield,
     Droplet,
+    DollarSign,
+    Package,
+    Truck,
 } from "lucide-react"
 import { toast } from "@/components/ui/toast"
 
@@ -30,9 +33,12 @@ const navItems = [
     { label: "Stations", icon: Building2, href: "/dashboard/stations" },
     { label: "Pumps", icon: Fuel, href: "/dashboard/pumps" },
     { label: "Fuel Types", icon: Droplet, href: "/dashboard/fuel-types" },
+    { label: "Prices", icon: DollarSign, href: "/dashboard/prices" },
     { label: "Attendants", icon: Users, href: "/dashboard/attendants" },
     { label: "Shifts", icon: Clock, href: "/dashboard/shifts" },
     { label: "Sales", icon: Wallet, href: "/dashboard/sales" },
+    { label: "Lubricants", icon: Package, href: "/dashboard/lubricants" },
+    { label: "Refills", icon: Truck, href: "/dashboard/refills" },
     { label: "M-Pesa", icon: Smartphone, href: "/dashboard/mpesa" },
     { label: "Reports", icon: TrendingUp, href: "/dashboard/reports" },
     { label: "Users", icon: UserCog, href: "/dashboard/users" },
