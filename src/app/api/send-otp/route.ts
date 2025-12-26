@@ -23,14 +23,19 @@ const otpStore = new Map<string, { otp: string; expires: number; attempts: numbe
 const OTP_EXPIRY_MS = 5 * 60 * 1000 // 5 minutes
 const MAX_ATTEMPTS = 3
 
-// Determine which provider to use (Twilio has priority)
+// Determine which provider to use (Africa's Talking has priority)
 function getActiveProvider(): 'twilio' | 'africastalking' | 'none' {
-    if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER) {
-        return 'twilio'
-    }
-    if (AT_API_KEY) {
+    // PRIORITY: Africa's Talking (preferred provider)
+    if (AT_API_KEY && AT_USERNAME) {
+        console.log('📱 Using Africa\'s Talking SMS provider')
         return 'africastalking'
     }
+    // Fallback: Twilio
+    if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER) {
+        console.log('📱 Using Twilio SMS provider')
+        return 'twilio'
+    }
+    console.log('⚠️ No SMS provider configured - running in dev mode')
     return 'none'
 }
 
@@ -236,7 +241,21 @@ async function sendAfricasTalkingSms(phone: string, otp: string): Promise<{ succ
             body: new URLSearchParams(bodyParams),
         })
 
-        const result = await response.json()
+        // Handle non-JSON responses gracefully
+        const responseText = await response.text()
+        console.log('Africa\'s Talking Raw Response:', responseText)
+
+        let result
+        try {
+            result = JSON.parse(responseText)
+        } catch (parseError) {
+            console.error('Failed to parse Africa\'s Talking response as JSON:', responseText)
+            return {
+                success: false,
+                error: `SMS API Error: ${responseText.substring(0, 100)}...`
+            }
+        }
+
         console.log('Africa\'s Talking Response:', JSON.stringify(result, null, 2))
 
         // Check if SMS was sent successfully
