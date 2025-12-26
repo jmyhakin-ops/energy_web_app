@@ -13,7 +13,7 @@ import { formatCurrency } from "@/lib/utils"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 
 interface Employee {
-    id: string  // UUID from Supabase
+    id: string  // String in frontend - actual DB type is INT (users_new.user_id)
     full_name: string
     monthly_salary: number
 }
@@ -21,7 +21,7 @@ interface Employee {
 interface SalaryAdvance {
     advance_id: number
     advance_code: string
-    user_id: string  // UUID
+    user_id: number  // INT in database
     amount: number
     request_date: string
     approved_date: string | null
@@ -31,6 +31,7 @@ interface SalaryAdvance {
     notes: string
     users?: { full_name: string; monthly_salary: number }
 }
+
 
 // Generate Advance Code
 function generateAdvanceCode(): string {
@@ -77,9 +78,10 @@ function AddAdvanceModal({
 
         setLoading(true)
         try {
+            // Convert user_id to integer for database (users_new.user_id is INT type)
             await onSave({
                 advance_code: generateAdvanceCode(),
-                user_id: formData.user_id,
+                user_id: parseInt(formData.user_id, 10),  // Convert string to INT
                 amount: formData.amount,
                 reason: formData.reason,
                 repayment_month: formData.repayment_month,
