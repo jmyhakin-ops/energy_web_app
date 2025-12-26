@@ -54,6 +54,19 @@ interface User {
     full_name: string
 }
 
+interface Shift {
+    shift_id: number
+    shift_name: string
+}
+
+interface PumpShift {
+    pump_shift_id: number
+    pump_id: number
+    shift_id: number
+    attendant_id: number
+    is_closed: boolean
+}
+
 // Generate receipt code like RCP-00001, RCP-00002, etc.
 function generateReceiptCode(count: number): string {
     const nextNum = count + 1
@@ -70,6 +83,8 @@ function AddSaleModal({
     pumps,
     fuelTypes,
     users,
+    shifts,
+    pumpShifts,
     nextSaleNumber,
     onSave,
     onClose,
@@ -78,6 +93,8 @@ function AddSaleModal({
     pumps: Pump[]
     fuelTypes: FuelType[]
     users: User[]
+    shifts: Shift[]
+    pumpShifts: PumpShift[]
     nextSaleNumber: number
     onSave: (data: any) => Promise<void>
     onClose: () => void
@@ -88,6 +105,7 @@ function AddSaleModal({
         receipt_no: receiptNumber,
         station_id: stations[0]?.station_id || 0,
         pump_id: 0,
+        shift_id: shifts[0]?.shift_id || 0,
         fuel_type_id: fuelTypes[0]?.fuel_type_id || 0,
         attendant_id: 0,
         total_amount: 0,
@@ -197,22 +215,52 @@ function AddSaleModal({
             toast.error("Required", "Select pump and enter amount")
             return
         }
+        if (!formData.shift_id) {
+            toast.error("Required", "Select a shift")
+            return
+        }
         // For M-Pesa, ensure payment is confirmed
         if (formData.payment_method === "mpesa" && mpesaState !== "success") {
             toast.error("Payment Required", "Complete M-Pesa payment first")
             return
         }
+
+        // Find pump_shift_id for the selected pump and shift
+        const pumpShift = pumpShifts.find(
+            ps => ps.pump_id === formData.pump_id && ps.shift_id === formData.shift_id && !ps.is_closed
+        )
+
+        if (!pumpShift) {
+            toast.error("No Active Shift", "No active pump shift found. Please start a shift first or select a different pump/shift.")
+            return
+        }
+
         setLoading(true)
         try {
-            await onSave({
-                ...formData,
+            // Generate sale_id_no required by database
+            const saleIdNo = `SALE-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+
+            const saleData = {
+                sale_id_no: saleIdNo,  // Required unique field
+                pump_shift_id: pumpShift.pump_shift_id,  // From active pump shift
+                pump_id: formData.pump_id,
+                station_id: formData.station_id,
+                attendant_id: formData.attendant_id || pumpShift.attendant_id || 1,
+                fuel_type_id: formData.fuel_type_id,
                 liters_sold: litersSold,
                 price_per_liter: pricePerLiter,
-                mpesa_transaction_id: mpesaReceipt || formData.mpesa_transaction_id,
+                total_amount: formData.total_amount,
+                payment_method: formData.payment_method,
+                mpesa_transaction_id: mpesaReceipt || formData.mpesa_transaction_id || null,
                 sale_time: new Date().toISOString(),
-            })
+                transaction_status: formData.payment_method === "mpesa" ? "COMPLETED" : "PENDING",
+            }
+
+            console.log("[Sales] Submitting sale:", saleData)
+            await onSave(saleData)
             onClose()
         } catch (error: unknown) {
+            console.error("[Sales] Error:", error)
             const errorMessage = error instanceof Error ? error.message : "Failed"
             toast.error("Error", errorMessage)
         }
@@ -261,6 +309,25 @@ function AddSaleModal({
                                 ))}
                             </select>
                         </div>
+                    </div>
+
+                    {/* Shift Selection */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">🕐 Shift</label>
+                        <select
+                            value={formData.shift_id}
+                            onChange={(e) => setFormData({ ...formData, shift_id: parseInt(e.target.value) })}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white"
+                            required
+                        >
+                            <option value="">Select Shift</option>
+                            {shifts.map((s) => (
+                                <option key={s.shift_id} value={s.shift_id}>{s.shift_name}</option>
+                            ))}
+                        </select>
+                        {pumpShifts.filter(ps => ps.pump_id === formData.pump_id && ps.shift_id === formData.shift_id).length > 0 && (
+                            <p className="text-xs text-green-600 mt-1">✅ Active shift found</p>
+                        )}
                     </div>
 
                     {/* Fuel Type - Visual Selection */}
@@ -451,6 +518,8 @@ export default function SalesPage() {
     const [pumps, setPumps] = useState<Pump[]>([])
     const [fuelTypes, setFuelTypes] = useState<FuelType[]>([])
     const [users, setUsers] = useState<User[]>([])
+    const [shifts, setShifts] = useState<Shift[]>([])
+    const [pumpShifts, setPumpShifts] = useState<PumpShift[]>([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
     const [showAddModal, setShowAddModal] = useState(false)
@@ -463,11 +532,13 @@ export default function SalesPage() {
         setLoading(true)
         try {
             if (isSupabaseConfigured() && supabase) {
-                const [stationsRes, pumpsRes, fuelTypesRes, usersRes, salesRes] = await Promise.all([
+                const [stationsRes, pumpsRes, fuelTypesRes, usersRes, shiftsRes, pumpShiftsRes, salesRes] = await Promise.all([
                     supabase.from("stations").select("station_id, station_name").eq("is_active", true).order("station_name"),
                     supabase.from("pumps").select("pump_id, pump_name, station_id").eq("is_active", true).order("pump_name"),
                     supabase.from("fuel_types").select("*").eq("is_active", true).order("fuel_name"),
                     supabase.from("users_new").select("user_id, full_name").eq("is_active", true).order("full_name"),
+                    supabase.from("shifts").select("shift_id, shift_name").order("shift_name"),
+                    supabase.from("pump_shifts").select("pump_shift_id, pump_id, shift_id, attendant_id, is_closed").eq("is_closed", false),
                     supabase.from("sales")
                         .select("*, station:stations(station_id, station_name), pump:pumps(pump_id, pump_name), attendant:users_new(user_id, full_name), fuel_type:fuel_types(fuel_type_id, fuel_name)")
                         .order("sale_time", { ascending: false })
@@ -478,6 +549,8 @@ export default function SalesPage() {
                 setPumps(pumpsRes.data || [])
                 setFuelTypes(fuelTypesRes.data || [])
                 setUsers(usersRes.data || [])
+                setShifts(shiftsRes.data || [])
+                setPumpShifts(pumpShiftsRes.data || [])
                 setSales(salesRes.data || [])
             } else {
                 toast.error("Database not configured", "Please configure Supabase")
@@ -706,6 +779,8 @@ export default function SalesPage() {
                     pumps={pumps}
                     fuelTypes={fuelTypes}
                     users={users}
+                    shifts={shifts}
+                    pumpShifts={pumpShifts}
                     nextSaleNumber={sales.length}
                     onSave={handleAddSale}
                     onClose={() => setShowAddModal(false)}
