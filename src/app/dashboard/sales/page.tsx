@@ -61,7 +61,10 @@ function generateReceiptCode(count: number): string {
     return `RCP-${paddedNum}`
 }
 
-// Add Sale Modal - Amount-based calculation
+// M-Pesa Payment States
+type MpesaState = "idle" | "sending" | "waiting" | "success" | "failed"
+
+// Add Sale Modal - Amount-based calculation with Real M-Pesa STK Push
 function AddSaleModal({
     stations,
     pumps,
@@ -87,22 +90,116 @@ function AddSaleModal({
         pump_id: 0,
         fuel_type_id: fuelTypes[0]?.fuel_type_id || 0,
         attendant_id: 0,
-        total_amount: 0, // User enters this
+        total_amount: 0,
         payment_method: "cash",
         mpesa_transaction_id: "",
+        phone_number: "",
     })
+
+    // M-Pesa STK Push State
+    const [mpesaState, setMpesaState] = useState<MpesaState>("idle")
+    const [checkoutRequestId, setCheckoutRequestId] = useState<string>("")
+    const [mpesaReceipt, setMpesaReceipt] = useState<string>("")
+    const [pollingCount, setPollingCount] = useState(0)
 
     const filteredPumps = pumps.filter(p => p.station_id === formData.station_id)
     const selectedFuel = fuelTypes.find(f => f.fuel_type_id === formData.fuel_type_id)
     const pricePerLiter = selectedFuel?.price_per_liter || 0
-
-    // Auto-calculate liters from amount
     const litersSold = pricePerLiter > 0 ? formData.total_amount / pricePerLiter : 0
+
+    // Initiate M-Pesa STK Push
+    const handleSendStkPush = async () => {
+        if (!formData.phone_number || formData.phone_number.length < 9) {
+            toast.error("Invalid", "Enter valid phone number")
+            return
+        }
+        if (formData.total_amount < 1) {
+            toast.error("Invalid", "Amount must be at least KES 1")
+            return
+        }
+
+        setMpesaState("sending")
+        try {
+            const response = await fetch("/api/mpesa", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    phone: formData.phone_number,
+                    amount: Math.round(formData.total_amount),
+                    account: receiptNumber,
+                    description: `Fuel Purchase - ${selectedFuel?.fuel_name || "Fuel"}`,
+                }),
+            })
+
+            const data = await response.json()
+
+            if (data.success && data.checkoutRequestId) {
+                setCheckoutRequestId(data.checkoutRequestId)
+                setMpesaState("waiting")
+                toast.success("STK Sent!", "Check phone for M-Pesa prompt")
+                // Start polling for payment status
+                startPolling(data.checkoutRequestId)
+            } else {
+                setMpesaState("failed")
+                toast.error("Failed", data.message || "Could not send STK Push")
+            }
+        } catch (error) {
+            setMpesaState("failed")
+            toast.error("Error", "Network error. Try again.")
+        }
+    }
+
+    // Poll for M-Pesa payment status
+    const startPolling = async (checkoutId: string) => {
+        let attempts = 0
+        const maxAttempts = 24 // 2 minutes (5s intervals)
+
+        const poll = async () => {
+            if (attempts >= maxAttempts) {
+                setMpesaState("failed")
+                toast.error("Timeout", "Payment not confirmed. Try again.")
+                return
+            }
+
+            attempts++
+            setPollingCount(attempts)
+
+            try {
+                const response = await fetch(`/api/mpesa?checkoutRequestId=${encodeURIComponent(checkoutId)}`)
+                const data = await response.json()
+
+                if (data.status === "completed" && data.mpesaReceiptNumber) {
+                    setMpesaReceipt(data.mpesaReceiptNumber)
+                    setFormData(prev => ({ ...prev, mpesa_transaction_id: data.mpesaReceiptNumber }))
+                    setMpesaState("success")
+                    toast.success("Payment Received!", `Receipt: ${data.mpesaReceiptNumber}`)
+                    return
+                } else if (data.status === "failed") {
+                    setMpesaState("failed")
+                    toast.error("Payment Failed", data.resultDesc || "Transaction was rejected")
+                    return
+                } else {
+                    // Still pending, poll again
+                    setTimeout(poll, 5000)
+                }
+            } catch {
+                // Network error, retry
+                setTimeout(poll, 5000)
+            }
+        }
+
+        poll()
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!formData.pump_id || !formData.total_amount) {
             toast.error("Required", "Select pump and enter amount")
+            return
+        }
+        // For M-Pesa, ensure payment is confirmed
+        if (formData.payment_method === "mpesa" && mpesaState !== "success") {
+            toast.error("Payment Required", "Complete M-Pesa payment first")
             return
         }
         setLoading(true)
@@ -111,6 +208,7 @@ function AddSaleModal({
                 ...formData,
                 liters_sold: litersSold,
                 price_per_liter: pricePerLiter,
+                mpesa_transaction_id: mpesaReceipt || formData.mpesa_transaction_id,
                 sale_time: new Date().toISOString(),
             })
             onClose()
@@ -189,7 +287,6 @@ function AddSaleModal({
                     {/* Amount & Liters - Side by Side */}
                     <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
                         <div className="grid grid-cols-2 gap-4">
-                            {/* Amount Input */}
                             <div>
                                 <label className="block text-sm font-medium text-green-700 mb-1">💰 Amount (KES)</label>
                                 <input
@@ -202,7 +299,6 @@ function AddSaleModal({
                                     autoFocus
                                 />
                             </div>
-                            {/* Liters Display */}
                             <div>
                                 <label className="block text-sm font-medium text-blue-700 mb-1">⛽ Liters (Auto)</label>
                                 <div className="w-full px-3 py-3 text-xl font-bold border-2 border-blue-200 rounded-xl bg-blue-50 text-center text-blue-700">
@@ -210,7 +306,6 @@ function AddSaleModal({
                                 </div>
                             </div>
                         </div>
-                        {/* Price info */}
                         <p className="text-xs text-gray-500 mt-2 text-center">
                             Price: {formatCurrency(pricePerLiter)}/L → {formData.total_amount > 0 ? `${formatCurrency(formData.total_amount)} ÷ ${formatCurrency(pricePerLiter)} = ${litersSold.toFixed(2)}L` : "Enter amount to calculate liters"}
                         </p>
@@ -235,7 +330,7 @@ function AddSaleModal({
                     <div className="grid grid-cols-2 gap-3">
                         <button
                             type="button"
-                            onClick={() => setFormData({ ...formData, payment_method: "cash" })}
+                            onClick={() => { setFormData({ ...formData, payment_method: "cash" }); setMpesaState("idle") }}
                             className={`p-3 rounded-xl border-2 text-center transition-all ${formData.payment_method === "cash"
                                 ? "border-green-500 bg-green-50"
                                 : "border-gray-200"
@@ -257,24 +352,89 @@ function AddSaleModal({
                         </button>
                     </div>
 
-                    {/* M-Pesa Receipt */}
+                    {/* M-Pesa STK Push Section */}
                     {formData.payment_method === "mpesa" && (
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">M-Pesa Receipt</label>
-                            <input
-                                type="text"
-                                value={formData.mpesa_transaction_id}
-                                onChange={(e) => setFormData({ ...formData, mpesa_transaction_id: e.target.value.toUpperCase() })}
-                                placeholder="e.g., SG12AB34CD"
-                                className="w-full px-3 py-2 border border-gray-200 rounded-xl"
-                            />
+                        <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-300 space-y-3">
+                            {/* Phone Input */}
+                            {mpesaState === "idle" && (
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-green-700 mb-1">📱 Phone Number</label>
+                                        <input
+                                            type="tel"
+                                            value={formData.phone_number}
+                                            onChange={(e) => setFormData({ ...formData, phone_number: e.target.value.replace(/\D/g, "") })}
+                                            placeholder="07XXXXXXXX"
+                                            className="w-full px-4 py-3 text-lg font-bold border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center bg-white"
+                                            maxLength={12}
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleSendStkPush}
+                                        disabled={formData.total_amount < 1}
+                                        className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-xl font-semibold flex items-center justify-center gap-2"
+                                    >
+                                        📤 Send M-Pesa Prompt
+                                    </button>
+                                    <p className="text-xs text-center text-gray-500">Customer will receive M-Pesa PIN request on their phone</p>
+                                </>
+                            )}
+
+                            {/* Sending */}
+                            {mpesaState === "sending" && (
+                                <div className="text-center py-4">
+                                    <Loader2 className="w-10 h-10 text-green-600 animate-spin mx-auto mb-2" />
+                                    <p className="text-green-700 font-medium">Sending STK Push...</p>
+                                </div>
+                            )}
+
+                            {/* Waiting for Payment */}
+                            {mpesaState === "waiting" && (
+                                <div className="text-center py-4">
+                                    <div className="w-16 h-16 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mx-auto mb-3" />
+                                    <p className="text-green-700 font-semibold mb-1">Waiting for payment...</p>
+                                    <p className="text-sm text-gray-500">Customer should enter PIN on phone</p>
+                                    <p className="text-xs text-gray-400 mt-2">Checking... ({pollingCount}/24)</p>
+                                </div>
+                            )}
+
+                            {/* Success */}
+                            {mpesaState === "success" && (
+                                <div className="text-center py-4">
+                                    <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-2" />
+                                    <p className="text-green-700 font-bold text-lg">Payment Received!</p>
+                                    <p className="text-sm text-gray-600 mt-1">Receipt: <span className="font-mono font-bold">{mpesaReceipt}</span></p>
+                                </div>
+                            )}
+
+                            {/* Failed */}
+                            {mpesaState === "failed" && (
+                                <div className="text-center py-4">
+                                    <XCircle className="w-12 h-12 text-red-500 mx-auto mb-2" />
+                                    <p className="text-red-600 font-semibold">Payment Failed</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => setMpesaState("idle")}
+                                        className="mt-3 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+                                    >
+                                        🔄 Try Again
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
                     {/* Actions */}
                     <div className="flex gap-3 pt-2">
                         <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-                        <Button type="submit" loading={loading} variant="success" className="flex-1">
+                        <Button
+                            type="submit"
+                            loading={loading}
+                            variant="success"
+                            className="flex-1"
+                            disabled={formData.payment_method === "mpesa" && mpesaState !== "success"}
+                        >
                             <Save className="w-4 h-4" /> Record Sale
                         </Button>
                     </div>
