@@ -25,6 +25,10 @@ import {
     Package,
     Truck,
     Calculator,
+    Banknote,
+    CreditCard,
+    Receipt,
+    FileText,
 } from "lucide-react"
 import { toast } from "@/components/ui/toast"
 
@@ -41,6 +45,10 @@ const navItems = [
     { label: "Lubricants", icon: Package, href: "/dashboard/lubricants" },
     { label: "Refills", icon: Truck, href: "/dashboard/refills" },
     { label: "M-Pesa", icon: Smartphone, href: "/dashboard/mpesa" },
+    { label: "Payroll", icon: Banknote, href: "/dashboard/payroll" },
+    { label: "Advances", icon: CreditCard, href: "/dashboard/advances" },
+    { label: "Expenses", icon: Receipt, href: "/dashboard/expenses" },
+    { label: "Vouchers", icon: FileText, href: "/dashboard/vouchers" },
     { label: "Accounting", icon: Calculator, href: "/dashboard/accounting" },
     { label: "Reports", icon: TrendingUp, href: "/dashboard/reports" },
     { label: "Users", icon: UserCog, href: "/dashboard/users" },
