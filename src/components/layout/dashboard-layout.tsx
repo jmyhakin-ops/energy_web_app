@@ -24,6 +24,7 @@ import {
     DollarSign,
     Package,
     Truck,
+    Calculator,
 } from "lucide-react"
 import { toast } from "@/components/ui/toast"
 
@@ -40,6 +41,7 @@ const navItems = [
     { label: "Lubricants", icon: Package, href: "/dashboard/lubricants" },
     { label: "Refills", icon: Truck, href: "/dashboard/refills" },
     { label: "M-Pesa", icon: Smartphone, href: "/dashboard/mpesa" },
+    { label: "Accounting", icon: Calculator, href: "/dashboard/accounting" },
     { label: "Reports", icon: TrendingUp, href: "/dashboard/reports" },
     { label: "Users", icon: UserCog, href: "/dashboard/users" },
     { label: "Roles", icon: Shield, href: "/dashboard/roles" },
