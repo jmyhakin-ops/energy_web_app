@@ -16,56 +16,64 @@ export function ToastProvider() {
     return (
         <HotToaster
             position="top-right"
-            gutter={12}
+            gutter={8}
             containerStyle={{
-                top: 20,
-                right: 20,
+                top: 16,
+                right: 16,
             }}
             toastOptions={{
-                duration: 5000,
+                duration: 3000,
                 style: {
                     background: 'transparent',
                     boxShadow: 'none',
                     padding: 0,
-                    maxWidth: '420px',
+                    maxWidth: '340px',
                 },
             }}
         />
     )
 }
 
-// ==================== CUSTOM TOAST STYLES ====================
+// ==================== MODERN LIGHT TOAST STYLES ====================
 const toastStyles = {
     base: `
-    flex items-center gap-4 w-full max-w-md p-4 rounded-2xl
-    shadow-2xl backdrop-blur-xl border
-    animate-in slide-in-from-right-full duration-300
+    flex items-center gap-3 w-full max-w-sm px-4 py-3 rounded-2xl
+    shadow-lg backdrop-blur-sm border
+    animate-in slide-in-from-right-full duration-200
   `,
     success: `
-    bg-gradient-to-r from-emerald-500/90 to-green-500/90
-    border-emerald-400/30 text-white
-    shadow-emerald-500/30
+    bg-gradient-to-r from-emerald-50 to-green-50
+    border-emerald-200 text-emerald-800
+    shadow-emerald-100
   `,
     error: `
-    bg-gradient-to-r from-red-500/90 to-rose-500/90
-    border-red-400/30 text-white
-    shadow-red-500/30
+    bg-gradient-to-r from-red-50 to-rose-50
+    border-red-200 text-red-800
+    shadow-red-100
   `,
     warning: `
-    bg-gradient-to-r from-amber-500/90 to-orange-500/90
-    border-amber-400/30 text-white
-    shadow-amber-500/30
+    bg-gradient-to-r from-amber-50 to-orange-50
+    border-amber-200 text-amber-800
+    shadow-amber-100
   `,
     info: `
-    bg-gradient-to-r from-blue-500/90 to-cyan-500/90
-    border-blue-400/30 text-white
-    shadow-blue-500/30
+    bg-gradient-to-r from-blue-50 to-cyan-50
+    border-blue-200 text-blue-800
+    shadow-blue-100
   `,
     loading: `
-    bg-gradient-to-r from-purple-500/90 to-indigo-500/90
-    border-purple-400/30 text-white
-    shadow-purple-500/30
+    bg-gradient-to-r from-violet-50 to-purple-50
+    border-violet-200 text-violet-800
+    shadow-violet-100
   `,
+}
+
+const iconStyles = {
+    success: "text-emerald-600 bg-emerald-100",
+    error: "text-red-600 bg-red-100",
+    warning: "text-amber-600 bg-amber-100",
+    info: "text-blue-600 bg-blue-100",
+    loading: "text-violet-600 bg-violet-100",
 }
 
 // ==================== CUSTOM TOAST COMPONENT ====================
@@ -80,21 +88,21 @@ interface ToastContentProps {
 function ToastContent({ icon, title, message, type, onDismiss }: ToastContentProps) {
     return (
         <div className={`${toastStyles.base} ${toastStyles[type]}`}>
-            <div className="flex-shrink-0 p-2 rounded-xl bg-white/20">
+            <div className={`flex-shrink-0 p-1.5 rounded-lg ${iconStyles[type]}`}>
                 {icon}
             </div>
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold">{title}</p>
+                <p className="text-sm font-semibold">{title}</p>
                 {message && (
-                    <p className="text-sm opacity-90 mt-0.5 line-clamp-2">{message}</p>
+                    <p className="text-xs opacity-75 mt-0.5 truncate">{message}</p>
                 )}
             </div>
             {onDismiss && (
                 <button
                     onClick={onDismiss}
-                    className="flex-shrink-0 p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+                    className="flex-shrink-0 p-1 rounded-lg hover:bg-black/5 transition-colors"
                 >
-                    <X className="w-4 h-4" />
+                    <X className="w-4 h-4 opacity-50" />
                 </button>
             )}
         </div>
@@ -106,7 +114,7 @@ export const toast = {
     success: (title: string, message?: string) => {
         return hotToast.custom((t) => (
             <ToastContent
-                icon={<CheckCircle2 className="w-6 h-6" />}
+                icon={<CheckCircle2 className="w-5 h-5" />}
                 title={title}
                 message={message}
                 type="success"
@@ -118,19 +126,19 @@ export const toast = {
     error: (title: string, message?: string) => {
         return hotToast.custom((t) => (
             <ToastContent
-                icon={<XCircle className="w-6 h-6" />}
+                icon={<XCircle className="w-5 h-5" />}
                 title={title}
                 message={message}
                 type="error"
                 onDismiss={() => hotToast.dismiss(t.id)}
             />
-        ))
+        ), { duration: 4000 })
     },
 
     warning: (title: string, message?: string) => {
         return hotToast.custom((t) => (
             <ToastContent
-                icon={<AlertTriangle className="w-6 h-6" />}
+                icon={<AlertTriangle className="w-5 h-5" />}
                 title={title}
                 message={message}
                 type="warning"
@@ -142,7 +150,7 @@ export const toast = {
     info: (title: string, message?: string) => {
         return hotToast.custom((t) => (
             <ToastContent
-                icon={<Info className="w-6 h-6" />}
+                icon={<Info className="w-5 h-5" />}
                 title={title}
                 message={message}
                 type="info"
@@ -154,7 +162,7 @@ export const toast = {
     loading: (title: string, message?: string) => {
         return hotToast.custom((t) => (
             <ToastContent
-                icon={<Loader2 className="w-6 h-6 animate-spin" />}
+                icon={<Loader2 className="w-5 h-5 animate-spin" />}
                 title={title}
                 message={message}
                 type="loading"
@@ -173,21 +181,21 @@ export const toast = {
         return hotToast.promise(promise, {
             loading: (
                 <ToastContent
-                    icon={<Loader2 className="w-6 h-6 animate-spin" />}
+                    icon={<Loader2 className="w-5 h-5 animate-spin" />}
                     title={messages.loading}
                     type="loading"
                 />
             ),
             success: (
                 <ToastContent
-                    icon={<CheckCircle2 className="w-6 h-6" />}
+                    icon={<CheckCircle2 className="w-5 h-5" />}
                     title={messages.success}
                     type="success"
                 />
             ),
             error: (
                 <ToastContent
-                    icon={<XCircle className="w-6 h-6" />}
+                    icon={<XCircle className="w-5 h-5" />}
                     title={messages.error}
                     type="error"
                 />
@@ -199,21 +207,21 @@ export const toast = {
     mpesaSuccess: (amount: number, receipt: string) => {
         return hotToast.custom((t) => (
             <ToastContent
-                icon={<span className="text-2xl">📱</span>}
-                title={`✅ M-Pesa Payment Received!`}
-                message={`KES ${amount.toLocaleString()} • Receipt: ${receipt}`}
+                icon={<span className="text-lg">📱</span>}
+                title="M-Pesa Received!"
+                message={`KES ${amount.toLocaleString()} • ${receipt}`}
                 type="success"
                 onDismiss={() => hotToast.dismiss(t.id)}
             />
-        ), { duration: 8000 })
+        ), { duration: 5000 })
     },
 
     mpesaPending: () => {
         return hotToast.custom((t) => (
             <ToastContent
-                icon={<Loader2 className="w-6 h-6 animate-spin" />}
-                title="⏳ Waiting for M-Pesa..."
-                message="Please check your phone and enter PIN"
+                icon={<Loader2 className="w-5 h-5 animate-spin" />}
+                title="Waiting for M-Pesa..."
+                message="Enter PIN on your phone"
                 type="loading"
             />
         ), { duration: Infinity })
@@ -222,9 +230,9 @@ export const toast = {
     mpesaFailed: (reason?: string) => {
         return hotToast.custom((t) => (
             <ToastContent
-                icon={<XCircle className="w-6 h-6" />}
-                title="❌ M-Pesa Payment Failed"
-                message={reason || "Transaction was not completed"}
+                icon={<XCircle className="w-5 h-5" />}
+                title="M-Pesa Failed"
+                message={reason || "Transaction cancelled"}
                 type="error"
                 onDismiss={() => hotToast.dismiss(t.id)}
             />
