@@ -232,30 +232,50 @@ export default function SalaryAdvancesPage() {
         setLoading(true)
         try {
             if (isSupabaseConfigured() && supabase) {
-                console.log("[SalaryAdvances] Fetching data from users_new table...")
+                console.log("[SalaryAdvances] Fetching data...")
 
-                const [empRes, advRes] = await Promise.all([
-                    // Use users_new table (user_id is INT)
-                    supabase.from("users_new").select("user_id, full_name, monthly_salary").eq("is_active", true).order("full_name"),
-                    supabase.from("salary_advances").select("*, users_new(full_name, monthly_salary)").order("created_at", { ascending: false }),
-                ])
+                // Fetch employees first
+                const empRes = await supabase
+                    .from("users_new")
+                    .select("user_id, full_name, monthly_salary")
+                    .eq("is_active", true)
+                    .order("full_name")
 
-                console.log("[SalaryAdvances] Employees response:", empRes.error || `Found ${empRes.data?.length || 0} employees`)
-                console.log("[SalaryAdvances] Advances response:", advRes.error || `Found ${advRes.data?.length || 0} advances`)
+                console.log("[SalaryAdvances] Employees:", empRes.error?.message || `Found ${empRes.data?.length || 0}`)
 
-                // Map user_id (INT) to id (string) for dropdown compatibility
-                const employees = (empRes.data || []).map((u: any) => ({
-                    id: u.user_id?.toString() || "",
-                    full_name: u.full_name,
-                    monthly_salary: u.monthly_salary || 0,
-                }))
+                // Create employee lookup map
+                const employeeMap = new Map<number, { full_name: string; monthly_salary: number }>()
+                const employees = (empRes.data || []).map((u: any) => {
+                    employeeMap.set(u.user_id, { full_name: u.full_name, monthly_salary: u.monthly_salary || 0 })
+                    return {
+                        id: u.user_id?.toString() || "",
+                        full_name: u.full_name,
+                        monthly_salary: u.monthly_salary || 0,
+                    }
+                })
                 setEmployees(employees)
 
-                // Map users_new to users for display
-                const advancesData = (advRes.data || []).map((a: any) => ({
-                    ...a,
-                    users: a.users_new ? { full_name: a.users_new.full_name, monthly_salary: a.users_new.monthly_salary } : null
-                }))
+                // Fetch advances WITHOUT join (to avoid relation issues)
+                const advRes = await supabase
+                    .from("salary_advances")
+                    .select("*")
+                    .order("created_at", { ascending: false })
+
+                console.log("[SalaryAdvances] Advances:", advRes.error?.message || `Found ${advRes.data?.length || 0}`)
+                if (advRes.error) {
+                    console.error("[SalaryAdvances] Advances error details:", advRes.error)
+                }
+
+                // Manually map employee data to advances
+                const advancesData = (advRes.data || []).map((a: any) => {
+                    const employee = employeeMap.get(a.user_id)
+                    return {
+                        ...a,
+                        users: employee ? { full_name: employee.full_name, monthly_salary: employee.monthly_salary } : null
+                    }
+                })
+
+                console.log("[SalaryAdvances] Mapped advances:", advancesData.length)
                 setAdvances(advancesData)
             }
         } catch (error) {
