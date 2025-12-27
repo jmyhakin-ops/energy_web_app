@@ -548,7 +548,7 @@ export default function SalesPage() {
         setLoading(true)
         try {
             if (isSupabaseConfigured() && supabase) {
-                const [stationsRes, pumpsRes, fuelTypesRes, usersRes, shiftsRes, pumpShiftsRes, salesRes] = await Promise.all([
+                const [stationsRes, pumpsRes, fuelTypesRes, usersRes, shiftsRes, pumpShiftsRes, salesRes, salesCountRes] = await Promise.all([
                     supabase.from("stations").select("station_id, station_name").eq("is_active", true).order("station_name"),
                     supabase.from("pumps").select("pump_id, pump_name, station_id").eq("is_active", true).order("pump_name"),
                     supabase.from("fuel_types").select("*").eq("is_active", true).order("fuel_name"),
@@ -570,6 +570,8 @@ export default function SalesPage() {
                 setShifts(shiftsRes.data || [])
                 setPumpShifts(pumpShiftsRes.data || [])
                 setSales(salesRes.data || [])
+                // Set total count from the count query
+                setTotalSalesCount(salesCountRes.count || salesRes.data?.length || 0)
             } else {
                 toast.error("Database not configured", "Please configure Supabase")
             }
@@ -601,11 +603,12 @@ export default function SalesPage() {
     )
 
     // Stats - use total_amount (new) with fallback to amount (original)
+    // Also check transaction_status for mobile app compatibility
     const stats = {
         total: sales.reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
         count: sales.length,
-        mpesa: sales.filter(s => s.payment_method === "mpesa").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
-        cash: sales.filter(s => s.payment_method === "cash").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
+        mpesa: sales.filter(s => s.payment_method === "mpesa" || s.transaction_status === "SUCCESS").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
+        cash: sales.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
     }
 
     const getPaymentColor = (method: string) => {
@@ -790,7 +793,7 @@ export default function SalesPage() {
                     users={users}
                     shifts={shifts}
                     pumpShifts={pumpShifts}
-                    nextSaleNumber={sales.length}
+                    nextSaleNumber={totalSalesCount}
                     onSave={handleAddSale}
                     onClose={() => setShowAddModal(false)}
                 />
