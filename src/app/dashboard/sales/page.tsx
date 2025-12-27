@@ -12,20 +12,30 @@ import { toast } from "@/components/ui/toast"
 import { formatCurrency, formatDateTime } from "@/lib/utils"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 
-// Sale interface matching database schema
+// Sale interface matching database schema (after migration)
 interface Sale {
     sale_id: number
+    sale_id_no: string
     pump_shift_id: number
-    fuel_type_id: number
-    liters_sold: number
-    price_per_liter: number
-    total_amount: number
-    payment_method: string
-    mpesa_transaction_id: string | null
-    sale_time: string
-    station_id: number
     pump_id: number
     attendant_id: number
+    amount: number
+    customer_mobile_no: string | null
+    transaction_status: string
+    checkout_request_id: string | null
+    mpesa_receipt_number: string | null
+    created_at: string
+    updated_at: string
+    station_id: number
+    // New detailed fields (after running migration)
+    fuel_type_id?: number
+    liters_sold?: number
+    price_per_liter?: number
+    total_amount?: number
+    payment_method?: string
+    sale_time?: string
+    mpesa_transaction_id?: string | null
+    // Relations
     station?: { station_id: number; station_name: string }
     pump?: { pump_id: number; pump_name: string }
     attendant?: { user_id: number; full_name: string }
@@ -237,23 +247,28 @@ function AddSaleModal({
 
         setLoading(true)
         try {
-            // Generate sale_id_no required by database
-            const saleIdNo = `SALE-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+            // Generate sale_id_no in same format as mobile app (RCP-XXXXX)
+            const saleIdNo = receiptNumber
 
+            // ALL fields including new detailed fields (migration already run)
             const saleData = {
-                sale_id_no: saleIdNo,  // Required unique field
-                pump_shift_id: pumpShift.pump_shift_id,  // From active pump shift
+                sale_id_no: saleIdNo,
+                pump_shift_id: pumpShift.pump_shift_id,
                 pump_id: formData.pump_id,
-                station_id: formData.station_id,
                 attendant_id: formData.attendant_id || pumpShift.attendant_id || 1,
-                fuel_type_id: formData.fuel_type_id,
+                amount: formData.total_amount,
+                customer_mobile_no: formData.phone_number || null,
+                transaction_status: formData.payment_method === "mpesa" ? "SUCCESS" : "CASH",
+                mpesa_receipt_number: mpesaReceipt || null,
+                station_id: formData.station_id,
+                // Detailed fields (from migration)
+                fuel_type_id: formData.fuel_type_id || null,
                 liters_sold: litersSold,
                 price_per_liter: pricePerLiter,
                 total_amount: formData.total_amount,
                 payment_method: formData.payment_method,
-                mpesa_transaction_id: mpesaReceipt || formData.mpesa_transaction_id || null,
                 sale_time: new Date().toISOString(),
-                transaction_status: formData.payment_method === "mpesa" ? "COMPLETED" : "PENDING",
+                mpesa_transaction_id: mpesaReceipt || null,
             }
 
             console.log("[Sales] Submitting sale:", saleData)
@@ -540,8 +555,8 @@ export default function SalesPage() {
                     supabase.from("shifts").select("shift_id, shift_name").order("shift_name"),
                     supabase.from("pump_shifts").select("pump_shift_id, pump_id, shift_id, attendant_id, is_closed").eq("is_closed", false),
                     supabase.from("sales")
-                        .select("*, station:stations(station_id, station_name), pump:pumps(pump_id, pump_name), attendant:users_new(user_id, full_name), fuel_type:fuel_types(fuel_type_id, fuel_name)")
-                        .order("sale_time", { ascending: false })
+                        .select("*, station:stations(station_id, station_name), pump:pumps(pump_id, pump_name), attendant:users_new(user_id, full_name)")
+                        .order("created_at", { ascending: false })
                         .limit(200),
                 ])
 
@@ -570,7 +585,7 @@ export default function SalesPage() {
             .insert([data])
 
         if (error) throw error
-        toast.success("✅ Sale Recorded!", `${formatCurrency(data.total_amount)} - ${data.liters_sold}L`)
+        toast.success("✅ Sale Recorded!", `${formatCurrency(data.total_amount)} - ${data.liters_sold?.toFixed(2) || 0}L`)
         fetchData()
     }
 
@@ -578,15 +593,16 @@ export default function SalesPage() {
     const filteredSales = sales.filter((sale) =>
         sale.station?.station_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         sale.attendant?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        sale.mpesa_receipt_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         sale.mpesa_transaction_id?.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
-    // Stats
+    // Stats - use total_amount (new) with fallback to amount (original)
     const stats = {
-        total: sales.reduce((acc, s) => acc + (s.total_amount || 0), 0),
+        total: sales.reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
         count: sales.length,
-        mpesa: sales.filter(s => s.payment_method === "mpesa").reduce((acc, s) => acc + (s.total_amount || 0), 0),
-        cash: sales.filter(s => s.payment_method === "cash").reduce((acc, s) => acc + (s.total_amount || 0), 0),
+        mpesa: sales.filter(s => s.payment_method === "mpesa").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
+        cash: sales.filter(s => s.payment_method === "cash").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
     }
 
     const getPaymentColor = (method: string) => {
@@ -724,7 +740,7 @@ export default function SalesPage() {
                                         {filteredSales.map((sale) => (
                                             <tr key={sale.sale_id} className="border-b border-gray-100 hover:bg-gray-50">
                                                 <td className="py-4 px-4">
-                                                    <span className="text-sm text-gray-600">{formatDateTime(sale.sale_time)}</span>
+                                                    <span className="text-sm text-gray-600">{formatDateTime(sale.created_at)}</span>
                                                 </td>
                                                 <td className="py-4 px-4">
                                                     <div className="flex items-center gap-2">
@@ -738,25 +754,15 @@ export default function SalesPage() {
                                                     </div>
                                                 </td>
                                                 <td className="py-4 px-4">
-                                                    <span className="px-2 py-1 rounded-lg text-xs font-medium bg-cyan-100 text-cyan-700">
-                                                        ⛽ {sale.fuel_type?.fuel_name || "—"}
+                                                    <span className="font-bold text-green-600">{formatCurrency(sale.amount || 0)}</span>
+                                                </td>
+                                                <td className="py-4 px-4">
+                                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${sale.transaction_status === "SUCCESS" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                                                        }`}>
+                                                        {sale.transaction_status === "SUCCESS" ? "📱 M-PESA" : "💵 PENDING"}
                                                     </span>
-                                                </td>
-                                                <td className="py-4 px-4">
-                                                    <span className="font-medium">{sale.liters_sold?.toFixed(2) || 0} L</span>
-                                                </td>
-                                                <td className="py-4 px-4">
-                                                    <span className="font-bold text-green-600">{formatCurrency(sale.total_amount || 0)}</span>
-                                                </td>
-                                                <td className="py-4 px-4">
-                                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${getPaymentColor(sale.payment_method)}`}>
-                                                        {sale.payment_method === "mpesa" && "📱"}
-                                                        {sale.payment_method === "cash" && "💵"}
-                                                        {sale.payment_method === "card" && "💳"}
-                                                        {sale.payment_method?.toUpperCase()}
-                                                    </span>
-                                                    {sale.mpesa_transaction_id && (
-                                                        <p className="text-xs text-gray-500 mt-1 font-mono">{sale.mpesa_transaction_id}</p>
+                                                    {sale.mpesa_receipt_number && (
+                                                        <p className="text-xs text-gray-500 mt-1 font-mono">{sale.mpesa_receipt_number}</p>
                                                     )}
                                                 </td>
                                                 <td className="py-4 px-4">
