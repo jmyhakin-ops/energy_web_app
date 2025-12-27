@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import {
     Wallet, Download, CheckCircle, XCircle, Clock, Loader2, RefreshCw,
-    Fuel, Building2, Plus, X, Save, CreditCard
+    Fuel, Building2, Plus, X, Save, CreditCard, FileSpreadsheet, Filter, Droplets
 } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -540,15 +540,16 @@ export default function SalesPage() {
     const [searchQuery, setSearchQuery] = useState("")
     const [showAddModal, setShowAddModal] = useState(false)
 
-    // Pagination
+    // Pagination - 7 per page for better visibility
     const [currentPage, setCurrentPage] = useState(1)
-    const pageSize = 20
+    const pageSize = 7
 
     // Filters
     const [selectedStation, setSelectedStation] = useState<number | null>(null)
     const [selectedPump, setSelectedPump] = useState<number | null>(null)
     const [selectedUser, setSelectedUser] = useState<number | null>(null)
     const [selectedShift, setSelectedShift] = useState<number | null>(null)
+    const [dateFilter, setDateFilter] = useState("")  // YYYY-MM-DD format
 
     useEffect(() => {
         fetchData()
@@ -619,6 +620,11 @@ export default function SalesPage() {
 
     // Filter sales by dropdown filters and search
     const filteredSales = sales.filter((sale) => {
+        // Date filter
+        if (dateFilter) {
+            const saleDate = sale.created_at?.split('T')[0]
+            if (saleDate !== dateFilter) return false
+        }
         // Dropdown filters
         if (selectedStation && sale.station_id !== selectedStation) return false
         if (selectedPump && sale.pump_id !== selectedPump) return false
@@ -655,6 +661,7 @@ export default function SalesPage() {
         setSelectedPump(null)
         setSelectedUser(null)
         setSelectedShift(null)
+        setDateFilter("")
         setSearchQuery("")
         setCurrentPage(1)
     }
@@ -666,6 +673,85 @@ export default function SalesPage() {
         count: totalSalesCount || sales.length,
         mpesa: sales.filter(s => s.payment_method === "mpesa" || s.transaction_status === "SUCCESS").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
         cash: sales.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
+        totalLiters: sales.reduce((acc, s) => acc + (s.liters_sold || 0), 0),
+    }
+
+    // Export to Excel with professional formatting
+    const exportToExcel = () => {
+        // Build filter summary
+        const filterParts = []
+        if (dateFilter) filterParts.push(`Date: ${dateFilter}`)
+        if (selectedStation) filterParts.push(`Station: ${stations.find(s => s.station_id === selectedStation)?.station_name}`)
+        if (selectedPump) filterParts.push(`Pump: ${pumps.find(p => p.pump_id === selectedPump)?.pump_name}`)
+        if (selectedUser) filterParts.push(`Attendant: ${users.find(u => u.user_id === selectedUser)?.full_name}`)
+        if (selectedShift) filterParts.push(`Shift: ${shifts.find(s => s.shift_id === selectedShift)?.shift_name}`)
+        const filterSummary = filterParts.length > 0 ? filterParts.join(' | ') : 'All Records'
+
+        // Calculate filtered stats
+        const filteredTotal = filteredSales.reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0)
+        const filteredMpesa = filteredSales.filter(s => s.payment_method === "mpesa" || s.transaction_status === "SUCCESS").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0)
+        const filteredCash = filteredSales.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0)
+        const filteredLiters = filteredSales.reduce((acc, s) => acc + (s.liters_sold || 0), 0)
+
+        // Create CSV content with headers
+        let csv = '\ufeff'  // UTF-8 BOM for Excel
+        csv += '═══════════════════════════════════════════════════════════════════════════\n'
+        csv += 'ALPHA ENERGY - SALES REPORT\n'
+        csv += '═══════════════════════════════════════════════════════════════════════════\n'
+        csv += `Generated: ${new Date().toLocaleString()}\n`
+        csv += `Filter: ${filterSummary}\n`
+        csv += '\n'
+        csv += '───────────────────────────────────────────────────────────────────────────\n'
+        csv += '                              SUMMARY\n'
+        csv += '───────────────────────────────────────────────────────────────────────────\n'
+        csv += `Total Transactions,${filteredSales.length}\n`
+        csv += `Total Sales,KES ${filteredTotal.toLocaleString()}\n`
+        csv += `M-Pesa Sales,KES ${filteredMpesa.toLocaleString()}\n`
+        csv += `Cash Sales,KES ${filteredCash.toLocaleString()}\n`
+        csv += `Total Liters,${filteredLiters.toFixed(2)} L\n`
+        csv += '\n'
+        csv += '───────────────────────────────────────────────────────────────────────────\n'
+        csv += '                           TRANSACTION DETAILS\n'
+        csv += '───────────────────────────────────────────────────────────────────────────\n'
+        csv += 'Receipt No,Station,Pump,Shift,Liters,Amount (KES),Payment,M-Pesa Receipt,Attendant,Date/Time\n'
+
+        filteredSales.forEach(sale => {
+            const stationName = stations.find(s => s.station_id === sale.station_id)?.station_name || '—'
+            const pumpName = pumps.find(p => p.pump_id === sale.pump_id)?.pump_name || '—'
+            const attendantName = users.find(u => u.user_id === sale.attendant_id)?.full_name || '—'
+            const pumpShift = pumpShifts.find(ps => ps.pump_shift_id === sale.pump_shift_id)
+            const shiftName = pumpShift ? shifts.find(s => s.shift_id === pumpShift.shift_id)?.shift_name || '—' : '—'
+            const isMpesa = sale.payment_method === "mpesa" || sale.transaction_status === "SUCCESS"
+            const isCash = sale.payment_method === "cash" || sale.transaction_status === "CASH"
+            const paymentType = isMpesa ? '📱 M-PESA' : isCash ? '💵 CASH' : sale.transaction_status || '—'
+
+            csv += `${sale.sale_id_no || `RCP-${String(sale.sale_id).padStart(5, '0')}`},`
+            csv += `"${stationName}",`
+            csv += `"${pumpName}",`
+            csv += `"${shiftName}",`
+            csv += `${sale.liters_sold?.toFixed(2) || '0.00'},`
+            csv += `${(sale.amount || sale.total_amount || 0).toFixed(2)},`
+            csv += `${paymentType},`
+            csv += `${sale.mpesa_receipt_number || ''},`
+            csv += `"${attendantName}",`
+            csv += `${sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}\n`
+        })
+
+        csv += '\n═══════════════════════════════════════════════════════════════════════════\n'
+        csv += '                          END OF REPORT\n'
+        csv += '═══════════════════════════════════════════════════════════════════════════\n'
+
+        // Download
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+        const link = document.createElement('a')
+        const url = URL.createObjectURL(blob)
+        link.setAttribute('href', url)
+        link.setAttribute('download', `Sales_Report_${dateFilter || new Date().toISOString().split('T')[0]}.csv`)
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        toast.success('📊 Exported!', `${filteredSales.length} transactions exported to Excel`)
     }
 
     const getPaymentColor = (method: string) => {
@@ -689,6 +775,9 @@ export default function SalesPage() {
                         <p className="text-gray-500">View all sales across stations</p>
                     </div>
                     <div className="flex gap-2">
+                        <Button variant="outline" onClick={exportToExcel}>
+                            <FileSpreadsheet className="w-4 h-4" /> Export Excel
+                        </Button>
                         <Button variant="outline" onClick={fetchData}>
                             <RefreshCw className="w-4 h-4" /> Refresh
                         </Button>
@@ -698,8 +787,8 @@ export default function SalesPage() {
                     </div>
                 </div>
 
-                {/* Stats */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Stats - 5 cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <Card>
                         <CardContent className="p-4">
                             <div className="flex items-center gap-3">
@@ -722,6 +811,19 @@ export default function SalesPage() {
                                 <div>
                                     <p className="text-lg font-bold text-gray-900">{stats.count}</p>
                                     <p className="text-xs text-gray-500">Transactions</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardContent className="p-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl bg-cyan-100 flex items-center justify-center">
+                                    <Droplets className="w-6 h-6 text-cyan-600" />
+                                </div>
+                                <div>
+                                    <p className="text-lg font-bold text-gray-900">{stats.totalLiters.toFixed(2)} L</p>
+                                    <p className="text-xs text-gray-500">Total Liters</p>
                                 </div>
                             </div>
                         </CardContent>
@@ -754,37 +856,85 @@ export default function SalesPage() {
                     </Card>
                 </div>
 
-                {/* Filters */}
+                {/* Complete Filters */}
                 <Card>
                     <CardContent className="p-4">
-                        <div className="flex flex-col md:flex-row gap-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                                <Filter className="w-4 h-4 text-blue-600" /> Filters
+                            </h3>
+                            <button onClick={clearFilters} className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1">
+                                <X className="w-3 h-3" /> Clear All
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                            {/* Date Filter */}
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">📅 Date</label>
+                                <input
+                                    type="date"
+                                    value={dateFilter}
+                                    onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1) }}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                />
+                            </div>
                             {/* Station Filter */}
-                            <div className="flex-1 md:max-w-[200px]">
+                            <div>
                                 <label className="block text-xs font-medium text-gray-500 mb-1">🏢 Station</label>
                                 <select
                                     value={selectedStation || ""}
-                                    onChange={(e) => {
-                                        setSelectedStation(e.target.value ? Number(e.target.value) : null)
-                                        setCurrentPage(1)
-                                    }}
-                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                    onChange={(e) => { setSelectedStation(e.target.value ? Number(e.target.value) : null); setCurrentPage(1) }}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
                                 >
-                                    <option value="">All Stations</option>
+                                    <option value="">All</option>
                                     {stations.map(s => <option key={s.station_id} value={s.station_id}>{s.station_name}</option>)}
                                 </select>
                             </div>
+                            {/* Pump Filter */}
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">⛽ Pump</label>
+                                <select
+                                    value={selectedPump || ""}
+                                    onChange={(e) => { setSelectedPump(e.target.value ? Number(e.target.value) : null); setCurrentPage(1) }}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                >
+                                    <option value="">All</option>
+                                    {pumps.filter(p => !selectedStation || p.station_id === selectedStation).map(p => <option key={p.pump_id} value={p.pump_id}>{p.pump_name}</option>)}
+                                </select>
+                            </div>
+                            {/* User Filter */}
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">👤 Attendant</label>
+                                <select
+                                    value={selectedUser || ""}
+                                    onChange={(e) => { setSelectedUser(e.target.value ? Number(e.target.value) : null); setCurrentPage(1) }}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                >
+                                    <option value="">All</option>
+                                    {users.map(u => <option key={u.user_id} value={u.user_id}>{u.full_name}</option>)}
+                                </select>
+                            </div>
+                            {/* Shift Filter */}
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">🕐 Shift</label>
+                                <select
+                                    value={selectedShift || ""}
+                                    onChange={(e) => { setSelectedShift(e.target.value ? Number(e.target.value) : null); setCurrentPage(1) }}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                >
+                                    <option value="">All</option>
+                                    {shifts.map(s => <option key={s.shift_id} value={s.shift_id}>{s.shift_name}</option>)}
+                                </select>
+                            </div>
                             {/* Search */}
-                            <div className="flex-1">
+                            <div>
                                 <label className="block text-xs font-medium text-gray-500 mb-1">🔍 Search</label>
                                 <input
                                     type="text"
                                     value={searchQuery}
-                                    onChange={(e) => {
-                                        setSearchQuery(e.target.value)
-                                        setCurrentPage(1)
-                                    }}
-                                    placeholder="Search by receipt, attendant, M-Pesa code..."
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1) }}
+                                    placeholder="Receipt, M-Pesa..."
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
                                 />
                             </div>
                         </div>
@@ -812,17 +962,18 @@ export default function SalesPage() {
                         ) : (
                             <>
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[900px]">
+                                    <table className="w-full min-w-[1000px]">
                                         <thead>
                                             <tr className="border-b border-gray-200 bg-gray-50">
-                                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Receipt No</th>
-                                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Station</th>
-                                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Pump</th>
-                                                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Liters</th>
-                                                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Amount</th>
-                                                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Payment</th>
-                                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Attendant</th>
-                                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Date/Time</th>
+                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Receipt No</th>
+                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Station</th>
+                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Pump</th>
+                                                <th className="text-right py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Liters</th>
+                                                <th className="text-right py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Amount</th>
+                                                <th className="text-center py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Payment</th>
+                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Attendant</th>
+                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Shift</th>
+                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Date/Time</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -831,6 +982,8 @@ export default function SalesPage() {
                                                 const stationName = stations.find(s => s.station_id === sale.station_id)?.station_name || '—'
                                                 const pumpName = pumps.find(p => p.pump_id === sale.pump_id)?.pump_name || '—'
                                                 const attendantName = users.find(u => u.user_id === sale.attendant_id)?.full_name || '—'
+                                                const pumpShift = pumpShifts.find(ps => ps.pump_shift_id === sale.pump_shift_id)
+                                                const shiftName = pumpShift ? shifts.find(s => s.shift_id === pumpShift.shift_id)?.shift_name || '—' : '—'
                                                 const isMpesa = sale.payment_method === "mpesa" || sale.transaction_status === "SUCCESS"
                                                 const isCash = sale.payment_method === "cash" || sale.transaction_status === "CASH"
 
@@ -853,8 +1006,8 @@ export default function SalesPage() {
                                                         </td>
                                                         <td className="py-3 px-4 text-center">
                                                             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${isMpesa ? "bg-green-100 text-green-700" :
-                                                                    isCash ? "bg-amber-100 text-amber-700" :
-                                                                        "bg-gray-100 text-gray-700"
+                                                                isCash ? "bg-amber-100 text-amber-700" :
+                                                                    "bg-gray-100 text-gray-700"
                                                                 }`}>
                                                                 {isMpesa ? "📱 M-PESA" : isCash ? "💵 CASH" : sale.transaction_status || "—"}
                                                             </span>
@@ -862,10 +1015,13 @@ export default function SalesPage() {
                                                                 <p className="text-xs text-gray-400 mt-0.5 font-mono">{sale.mpesa_receipt_number}</p>
                                                             )}
                                                         </td>
-                                                        <td className="py-3 px-4">
+                                                        <td className="py-3 px-3">
                                                             <span className="text-sm text-gray-700">{attendantName}</span>
                                                         </td>
-                                                        <td className="py-3 px-4">
+                                                        <td className="py-3 px-3">
+                                                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-indigo-50 text-indigo-700">{shiftName}</span>
+                                                        </td>
+                                                        <td className="py-3 px-3">
                                                             <span className="text-xs text-gray-500">{formatDateTime(sale.created_at)}</span>
                                                         </td>
                                                     </tr>
