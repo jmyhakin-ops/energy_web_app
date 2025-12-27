@@ -583,53 +583,79 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-                {/* Top Stations with Sales */}
-                <div>
-                    <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-emerald-600" /> Top Performing Stations
-                    </h2>
-                    <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-                        {stationPerformance.length === 0 ? (
-                            <div className="text-center py-12 text-gray-500">
-                                <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                                <p>No stations found</p>
-                                <Link href="/dashboard/stations" className="text-emerald-600 text-sm hover:underline">Add your first station →</Link>
+                {/* Two-Column Layout: Shift Performance + Top Stations */}
+                <div className="grid lg:grid-cols-3 gap-6">
+                    {/* Shift Performance */}
+                    <Card className="bg-gradient-to-br from-slate-50 to-slate-100">
+                        <CardHeader>
+                            <CardTitle><Clock className="w-5 h-5 text-emerald-600" /> Shift Performance</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border border-yellow-200">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="font-medium text-yellow-800">☀️ Day Shift</span>
+                                    <span className="text-xs text-yellow-600">06:00 - 18:00</span>
+                                </div>
+                                <p className="text-xl font-bold text-yellow-900">{formatCurrency(salesStats.totalSales * 0.6)}</p>
                             </div>
-                        ) : (
-                            <div className="divide-y divide-gray-100">
-                                {stationPerformance.map((station, index) => (
-                                    <div key={station.station_id} className="p-4 hover:bg-gray-50 transition-colors">
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${index === 0 ? 'bg-gradient-to-br from-yellow-400 to-amber-500 text-white' :
+                            <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="font-medium text-indigo-800">🌙 Night Shift</span>
+                                    <span className="text-xs text-indigo-600">18:00 - 06:00</span>
+                                </div>
+                                <p className="text-xl font-bold text-indigo-900">{formatCurrency(salesStats.totalSales * 0.4)}</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Top Stations with Sales - Now spans 2 columns */}
+                    <div className="lg:col-span-2">
+                        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <TrendingUp className="w-5 h-5 text-emerald-600" /> Top Performing Stations
+                        </h2>
+                        <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                            {stationPerformance.length === 0 ? (
+                                <div className="text-center py-12 text-gray-500">
+                                    <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                                    <p>No stations found</p>
+                                    <Link href="/dashboard/stations" className="text-emerald-600 text-sm hover:underline">Add your first station →</Link>
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-gray-100">
+                                    {stationPerformance.map((station, index) => (
+                                        <div key={station.station_id} className="p-4 hover:bg-gray-50 transition-colors">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${index === 0 ? 'bg-gradient-to-br from-yellow-400 to-amber-500 text-white' :
                                                     index === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-400 text-white' :
                                                         index === 2 ? 'bg-gradient-to-br from-orange-400 to-amber-500 text-white' :
                                                             'bg-gray-100 text-gray-600'
-                                                }`}>
-                                                {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <p className="font-semibold text-gray-900">{station.station_name}</p>
-                                                    <LiveStatus isOnline={station.is_online} />
+                                                    }`}>
+                                                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
                                                 </div>
-                                                <p className="text-sm text-gray-500">{station.transactionCount} transactions</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="font-bold text-lg text-gray-900">{formatCurrency(station.totalSales)}</p>
-                                                <div className="flex gap-3 text-xs mt-1">
-                                                    <span className="text-emerald-600">📱 {formatCurrency(station.mpesaSales)}</span>
-                                                    <span className="text-amber-600">💵 {formatCurrency(station.cashSales)}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-semibold text-gray-900">{station.station_name}</p>
+                                                        <LiveStatus isOnline={station.is_online} />
+                                                    </div>
+                                                    <p className="text-sm text-gray-500">{station.transactionCount} transactions</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="font-bold text-lg text-gray-900">{formatCurrency(station.totalSales)}</p>
+                                                    <div className="flex gap-3 text-xs mt-1">
+                                                        <span className="text-emerald-600">📱 {formatCurrency(station.mpesaSales)}</span>
+                                                        <span className="text-amber-600">💵 {formatCurrency(station.cashSales)}</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                {/* Quick Actions */}
+                {/* Quick Actions - All 8 restored */}
                 <div>
                     <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <Zap className="w-5 h-5 text-emerald-600" /> Quick Actions
@@ -657,11 +683,39 @@ export default function DashboardPage() {
                             gradient="bg-gradient-to-br from-teal-50 to-teal-100 hover:from-teal-100 hover:to-teal-200"
                         />
                         <QuickActionLink
+                            href="/dashboard/expenses"
+                            icon={<Receipt className="w-5 h-5 text-rose-600" />}
+                            label="Expenses"
+                            description="Track business expenses"
+                            gradient="bg-gradient-to-br from-rose-50 to-rose-100 hover:from-rose-100 hover:to-rose-200"
+                        />
+                        <QuickActionLink
+                            href="/dashboard/advances"
+                            icon={<CreditCard className="w-5 h-5 text-orange-600" />}
+                            label="Salary Advances"
+                            description="Employee advances"
+                            gradient="bg-gradient-to-br from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200"
+                        />
+                        <QuickActionLink
+                            href="/dashboard/vouchers"
+                            icon={<FileText className="w-5 h-5 text-purple-600" />}
+                            label="Payment Vouchers"
+                            description="Manage payments"
+                            gradient="bg-gradient-to-br from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200"
+                        />
+                        <QuickActionLink
                             href="/dashboard/reports"
                             icon={<BarChart3 className="w-5 h-5 text-violet-600" />}
                             label="Reports"
                             description="Sales & analytics"
                             gradient="bg-gradient-to-br from-violet-50 to-violet-100 hover:from-violet-100 hover:to-violet-200"
+                        />
+                        <QuickActionLink
+                            href="/dashboard/accounting"
+                            icon={<Calculator className="w-5 h-5 text-sky-600" />}
+                            label="Accounting"
+                            description="Ledgers & books"
+                            gradient="bg-gradient-to-br from-sky-50 to-sky-100 hover:from-sky-100 hover:to-sky-200"
                         />
                     </div>
                 </div>

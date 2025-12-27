@@ -594,13 +594,18 @@ export default function SalesPage() {
         fetchData()
     }
 
-    // Filter sales
-    const filteredSales = sales.filter((sale) =>
-        sale.station?.station_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        sale.attendant?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        sale.mpesa_receipt_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        sale.mpesa_transaction_id?.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    // Filter sales - return all if no search, else filter by matching fields
+    const filteredSales = sales.filter((sale) => {
+        if (!searchQuery.trim()) return true  // Return all when no search
+        const query = searchQuery.toLowerCase()
+        return (
+            sale.station?.station_name?.toLowerCase().includes(query) ||
+            sale.attendant?.full_name?.toLowerCase().includes(query) ||
+            sale.mpesa_receipt_number?.toLowerCase().includes(query) ||
+            sale.mpesa_transaction_id?.toLowerCase().includes(query) ||
+            sale.sale_id_no?.toLowerCase().includes(query)
+        )
+    })
 
     // Stats - use total_amount (new) with fallback to amount (original)
     // Also check transaction_status for mobile app compatibility
