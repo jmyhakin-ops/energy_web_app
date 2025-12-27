@@ -670,14 +670,14 @@ export default function SalesPage() {
         setCurrentPage(1)
     }
 
-    // Stats - use total_amount (new) with fallback to amount (original)
+    // Stats - MUST use filteredSales to reflect current filters!
     // Also check transaction_status for mobile app compatibility
     const stats = {
-        total: sales.reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
-        count: totalSalesCount || sales.length,
-        mpesa: sales.filter(s => s.payment_method === "mpesa" || s.transaction_status === "SUCCESS").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
-        cash: sales.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
-        totalLiters: sales.reduce((acc, s) => acc + (s.liters_sold || 0), 0),
+        total: filteredSales.reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
+        count: filteredSales.length,
+        mpesa: filteredSales.filter(s => s.payment_method === "mpesa" || s.transaction_status === "SUCCESS").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
+        cash: filteredSales.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
+        totalLiters: filteredSales.reduce((acc, s) => acc + (s.liters_sold || 0), 0),
     }
 
     // Export to Excel with professional formatting
@@ -1028,6 +1028,26 @@ export default function SalesPage() {
                                     placeholder="Receipt, M-Pesa..."
                                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
                                 />
+                            </div>
+                        </div>
+                        {/* Filter Actions Row */}
+                        <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                            <p className="text-xs text-gray-400 italic">
+                                ✅ Filters applied automatically • Showing {filteredSales.length} of {sales.length} records
+                            </p>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={clearFilters}
+                                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-1"
+                                >
+                                    <X className="w-4 h-4" /> Clear Filters
+                                </button>
+                                <button
+                                    onClick={fetchData}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-1"
+                                >
+                                    <RefreshCw className="w-4 h-4" /> Apply & Refresh
+                                </button>
                             </div>
                         </div>
                     </CardContent>
