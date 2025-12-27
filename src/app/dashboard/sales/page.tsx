@@ -555,13 +555,26 @@ export default function SalesPage() {
                     supabase.from("users_new").select("user_id, full_name").eq("is_active", true).order("full_name"),
                     supabase.from("shifts").select("shift_id, shift_name").order("shift_name"),
                     supabase.from("pump_shifts").select("pump_shift_id, pump_id, shift_id, attendant_id, is_closed").eq("is_closed", false),
+                    // Simplified: Fetch sales without complex joins (joins may fail if FK missing)
                     supabase.from("sales")
-                        .select("*, station:stations(station_id, station_name), pump:pumps(pump_id, pump_name), attendant:users_new(user_id, full_name)")
+                        .select("*")
                         .order("created_at", { ascending: false })
-                        .limit(200),
+                        .limit(500),
                     // Get TOTAL count of all sales for receipt number
                     supabase.from("sales").select("sale_id", { count: "exact", head: true }),
                 ])
+
+                console.log("[Sales] Fetched data:", {
+                    stations: stationsRes.data?.length,
+                    pumps: pumpsRes.data?.length,
+                    fuelTypes: fuelTypesRes.data?.length,
+                    users: usersRes.data?.length,
+                    shifts: shiftsRes.data?.length,
+                    pumpShifts: pumpShiftsRes.data?.length,
+                    sales: salesRes.data?.length,
+                    salesCount: salesCountRes.count,
+                    salesError: salesRes.error,
+                })
 
                 setStations(stationsRes.data || [])
                 setPumps(pumpsRes.data || [])
@@ -748,39 +761,56 @@ export default function SalesPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredSales.map((sale) => (
-                                            <tr key={sale.sale_id} className="border-b border-gray-100 hover:bg-gray-50">
-                                                <td className="py-4 px-4">
-                                                    <span className="text-sm text-gray-600">{formatDateTime(sale.created_at)}</span>
-                                                </td>
-                                                <td className="py-4 px-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <Building2 className="w-4 h-4 text-blue-600" />
+                                        {filteredSales.map((sale) => {
+                                            // Lookup names from loaded arrays
+                                            const stationName = stations.find(s => s.station_id === sale.station_id)?.station_name || `Station ${sale.station_id || '?'}`
+                                            const pumpName = pumps.find(p => p.pump_id === sale.pump_id)?.pump_name || `Pump ${sale.pump_id || '?'}`
+                                            const attendantName = users.find(u => u.user_id === sale.attendant_id)?.full_name || `User ${sale.attendant_id || '?'}`
+                                            const isMpesa = sale.payment_method === "mpesa" || sale.transaction_status === "SUCCESS"
+                                            const isCash = sale.payment_method === "cash" || sale.transaction_status === "CASH"
+
+                                            return (
+                                                <tr key={sale.sale_id} className="border-b border-gray-100 hover:bg-gray-50">
+                                                    <td className="py-4 px-4">
                                                         <div>
-                                                            <p className="font-medium text-gray-900">{sale.station?.station_name || "—"}</p>
-                                                            <p className="text-xs text-gray-500 flex items-center gap-1">
-                                                                <Fuel className="w-3 h-3" /> {sale.pump?.pump_name || "—"}
-                                                            </p>
+                                                            <span className="text-sm text-gray-600">{formatDateTime(sale.created_at)}</span>
+                                                            <p className="text-xs text-gray-400 font-mono">{sale.sale_id_no || `#${sale.sale_id}`}</p>
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td className="py-4 px-4">
-                                                    <span className="font-bold text-green-600">{formatCurrency(sale.amount || 0)}</span>
-                                                </td>
-                                                <td className="py-4 px-4">
-                                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${sale.transaction_status === "SUCCESS" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
-                                                        }`}>
-                                                        {sale.transaction_status === "SUCCESS" ? "📱 M-PESA" : "💵 PENDING"}
-                                                    </span>
-                                                    {sale.mpesa_receipt_number && (
-                                                        <p className="text-xs text-gray-500 mt-1 font-mono">{sale.mpesa_receipt_number}</p>
-                                                    )}
-                                                </td>
-                                                <td className="py-4 px-4">
-                                                    <span className="text-sm">{sale.attendant?.full_name || "—"}</span>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                    </td>
+                                                    <td className="py-4 px-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <Building2 className="w-4 h-4 text-blue-600" />
+                                                            <div>
+                                                                <p className="font-medium text-gray-900">{stationName}</p>
+                                                                <p className="text-xs text-gray-500 flex items-center gap-1">
+                                                                    <Fuel className="w-3 h-3" /> {pumpName}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-4 px-4">
+                                                        <span className="text-sm text-gray-600">{sale.liters_sold?.toFixed(2) || '—'} L</span>
+                                                    </td>
+                                                    <td className="py-4 px-4">
+                                                        <span className="font-bold text-green-600">{formatCurrency(sale.amount || sale.total_amount || 0)}</span>
+                                                    </td>
+                                                    <td className="py-4 px-4">
+                                                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${isMpesa ? "bg-green-100 text-green-700" :
+                                                                isCash ? "bg-amber-100 text-amber-700" :
+                                                                    "bg-gray-100 text-gray-700"
+                                                            }`}>
+                                                            {isMpesa ? "📱 M-PESA" : isCash ? "💵 CASH" : sale.transaction_status || "—"}
+                                                        </span>
+                                                        {sale.mpesa_receipt_number && (
+                                                            <p className="text-xs text-gray-500 mt-1 font-mono">{sale.mpesa_receipt_number}</p>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-4 px-4">
+                                                        <span className="text-sm">{attendantName}</span>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
