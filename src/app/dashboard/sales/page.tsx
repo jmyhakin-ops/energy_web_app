@@ -540,6 +540,16 @@ export default function SalesPage() {
     const [searchQuery, setSearchQuery] = useState("")
     const [showAddModal, setShowAddModal] = useState(false)
 
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1)
+    const pageSize = 20
+
+    // Filters
+    const [selectedStation, setSelectedStation] = useState<number | null>(null)
+    const [selectedPump, setSelectedPump] = useState<number | null>(null)
+    const [selectedUser, setSelectedUser] = useState<number | null>(null)
+    const [selectedShift, setSelectedShift] = useState<number | null>(null)
+
     useEffect(() => {
         fetchData()
     }, [])
@@ -607,24 +617,53 @@ export default function SalesPage() {
         fetchData()
     }
 
-    // Filter sales - return all if no search, else filter by matching fields
+    // Filter sales by dropdown filters and search
     const filteredSales = sales.filter((sale) => {
-        if (!searchQuery.trim()) return true  // Return all when no search
-        const query = searchQuery.toLowerCase()
-        return (
-            sale.station?.station_name?.toLowerCase().includes(query) ||
-            sale.attendant?.full_name?.toLowerCase().includes(query) ||
-            sale.mpesa_receipt_number?.toLowerCase().includes(query) ||
-            sale.mpesa_transaction_id?.toLowerCase().includes(query) ||
-            sale.sale_id_no?.toLowerCase().includes(query)
-        )
+        // Dropdown filters
+        if (selectedStation && sale.station_id !== selectedStation) return false
+        if (selectedPump && sale.pump_id !== selectedPump) return false
+        if (selectedUser && sale.attendant_id !== selectedUser) return false
+        // Shift filter through pump_shift lookup
+        if (selectedShift) {
+            const pumpShift = pumpShifts.find(ps => ps.pump_shift_id === sale.pump_shift_id)
+            if (pumpShift && pumpShift.shift_id !== selectedShift) return false
+        }
+
+        // Search query filter
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase()
+            const stationName = stations.find(s => s.station_id === sale.station_id)?.station_name || ''
+            const attendantName = users.find(u => u.user_id === sale.attendant_id)?.full_name || ''
+            return (
+                stationName.toLowerCase().includes(query) ||
+                attendantName.toLowerCase().includes(query) ||
+                sale.mpesa_receipt_number?.toLowerCase().includes(query) ||
+                sale.mpesa_transaction_id?.toLowerCase().includes(query) ||
+                sale.sale_id_no?.toLowerCase().includes(query)
+            )
+        }
+        return true
     })
+
+    // Pagination
+    const totalPages = Math.ceil(filteredSales.length / pageSize)
+    const paginatedSales = filteredSales.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+    // Reset to page 1 when filters change
+    const clearFilters = () => {
+        setSelectedStation(null)
+        setSelectedPump(null)
+        setSelectedUser(null)
+        setSelectedShift(null)
+        setSearchQuery("")
+        setCurrentPage(1)
+    }
 
     // Stats - use total_amount (new) with fallback to amount (original)
     // Also check transaction_status for mobile app compatibility
     const stats = {
         total: sales.reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
-        count: sales.length,
+        count: totalSalesCount || sales.length,
         mpesa: sales.filter(s => s.payment_method === "mpesa" || s.transaction_status === "SUCCESS").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
         cash: sales.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
     }
@@ -715,16 +754,40 @@ export default function SalesPage() {
                     </Card>
                 </div>
 
-                {/* Search */}
+                {/* Filters */}
                 <Card>
                     <CardContent className="p-4">
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="🔍 Search by station, attendant, or M-Pesa code..."
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none"
-                        />
+                        <div className="flex flex-col md:flex-row gap-4">
+                            {/* Station Filter */}
+                            <div className="flex-1 md:max-w-[200px]">
+                                <label className="block text-xs font-medium text-gray-500 mb-1">🏢 Station</label>
+                                <select
+                                    value={selectedStation || ""}
+                                    onChange={(e) => {
+                                        setSelectedStation(e.target.value ? Number(e.target.value) : null)
+                                        setCurrentPage(1)
+                                    }}
+                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                >
+                                    <option value="">All Stations</option>
+                                    {stations.map(s => <option key={s.station_id} value={s.station_id}>{s.station_name}</option>)}
+                                </select>
+                            </div>
+                            {/* Search */}
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium text-gray-500 mb-1">🔍 Search</label>
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value)
+                                        setCurrentPage(1)
+                                    }}
+                                    placeholder="Search by receipt, attendant, M-Pesa code..."
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                />
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
 
@@ -733,7 +796,7 @@ export default function SalesPage() {
                     <CardHeader>
                         <CardTitle>
                             <Wallet className="w-5 h-5 text-green-600" />
-                            📋 Recent Transactions ({filteredSales.length})
+                            📋 Transactions ({filteredSales.length} total)
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -744,76 +807,100 @@ export default function SalesPage() {
                         ) : filteredSales.length === 0 ? (
                             <div className="text-center py-12 text-gray-500">
                                 <Wallet className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                                <p>{sales.length === 0 ? "No sales found. Record your first sale!" : "No sales match your search"}</p>
+                                <p>{sales.length === 0 ? "No sales found. Record your first sale!" : "No sales match your filter"}</p>
                             </div>
                         ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full min-w-[800px]">
-                                    <thead>
-                                        <tr className="border-b border-gray-200">
-                                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Time</th>
-                                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Station / Pump</th>
-                                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Fuel</th>
-                                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Liters</th>
-                                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Amount</th>
-                                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Payment</th>
-                                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Attendant</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredSales.map((sale) => {
-                                            // Lookup names from loaded arrays
-                                            const stationName = stations.find(s => s.station_id === sale.station_id)?.station_name || `Station ${sale.station_id || '?'}`
-                                            const pumpName = pumps.find(p => p.pump_id === sale.pump_id)?.pump_name || `Pump ${sale.pump_id || '?'}`
-                                            const attendantName = users.find(u => u.user_id === sale.attendant_id)?.full_name || `User ${sale.attendant_id || '?'}`
-                                            const isMpesa = sale.payment_method === "mpesa" || sale.transaction_status === "SUCCESS"
-                                            const isCash = sale.payment_method === "cash" || sale.transaction_status === "CASH"
+                            <>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[900px]">
+                                        <thead>
+                                            <tr className="border-b border-gray-200 bg-gray-50">
+                                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Receipt No</th>
+                                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Station</th>
+                                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Pump</th>
+                                                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Liters</th>
+                                                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Amount</th>
+                                                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Payment</th>
+                                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Attendant</th>
+                                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Date/Time</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {paginatedSales.map((sale) => {
+                                                // Lookup names from loaded arrays
+                                                const stationName = stations.find(s => s.station_id === sale.station_id)?.station_name || '—'
+                                                const pumpName = pumps.find(p => p.pump_id === sale.pump_id)?.pump_name || '—'
+                                                const attendantName = users.find(u => u.user_id === sale.attendant_id)?.full_name || '—'
+                                                const isMpesa = sale.payment_method === "mpesa" || sale.transaction_status === "SUCCESS"
+                                                const isCash = sale.payment_method === "cash" || sale.transaction_status === "CASH"
 
-                                            return (
-                                                <tr key={sale.sale_id} className="border-b border-gray-100 hover:bg-gray-50">
-                                                    <td className="py-4 px-4">
-                                                        <div>
-                                                            <span className="text-sm text-gray-600">{formatDateTime(sale.created_at)}</span>
-                                                            <p className="text-xs text-gray-400 font-mono">{sale.sale_id_no || `#${sale.sale_id}`}</p>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-4 px-4">
-                                                        <div className="flex items-center gap-2">
-                                                            <Building2 className="w-4 h-4 text-blue-600" />
-                                                            <div>
-                                                                <p className="font-medium text-gray-900">{stationName}</p>
-                                                                <p className="text-xs text-gray-500 flex items-center gap-1">
-                                                                    <Fuel className="w-3 h-3" /> {pumpName}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-4 px-4">
-                                                        <span className="text-sm text-gray-600">{sale.liters_sold?.toFixed(2) || '—'} L</span>
-                                                    </td>
-                                                    <td className="py-4 px-4">
-                                                        <span className="font-bold text-green-600">{formatCurrency(sale.amount || sale.total_amount || 0)}</span>
-                                                    </td>
-                                                    <td className="py-4 px-4">
-                                                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${isMpesa ? "bg-green-100 text-green-700" :
-                                                                isCash ? "bg-amber-100 text-amber-700" :
-                                                                    "bg-gray-100 text-gray-700"
-                                                            }`}>
-                                                            {isMpesa ? "📱 M-PESA" : isCash ? "💵 CASH" : sale.transaction_status || "—"}
-                                                        </span>
-                                                        {sale.mpesa_receipt_number && (
-                                                            <p className="text-xs text-gray-500 mt-1 font-mono">{sale.mpesa_receipt_number}</p>
-                                                        )}
-                                                    </td>
-                                                    <td className="py-4 px-4">
-                                                        <span className="text-sm">{attendantName}</span>
-                                                    </td>
-                                                </tr>
-                                            )
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                return (
+                                                    <tr key={sale.sale_id} className="border-b border-gray-100 hover:bg-blue-50 transition-colors">
+                                                        <td className="py-3 px-4">
+                                                            <span className="font-mono text-sm font-medium text-blue-600">{sale.sale_id_no || `RCP-${String(sale.sale_id).padStart(5, '0')}`}</span>
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <span className="text-sm font-medium text-gray-900">{stationName}</span>
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <span className="text-sm text-gray-600">{pumpName}</span>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-right">
+                                                            <span className="text-sm text-gray-600">{sale.liters_sold?.toFixed(2) || '0.00'} L</span>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-right">
+                                                            <span className="font-bold text-green-600">{formatCurrency(sale.amount || sale.total_amount || 0)}</span>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-center">
+                                                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${isMpesa ? "bg-green-100 text-green-700" :
+                                                                    isCash ? "bg-amber-100 text-amber-700" :
+                                                                        "bg-gray-100 text-gray-700"
+                                                                }`}>
+                                                                {isMpesa ? "📱 M-PESA" : isCash ? "💵 CASH" : sale.transaction_status || "—"}
+                                                            </span>
+                                                            {sale.mpesa_receipt_number && (
+                                                                <p className="text-xs text-gray-400 mt-0.5 font-mono">{sale.mpesa_receipt_number}</p>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <span className="text-sm text-gray-700">{attendantName}</span>
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <span className="text-xs text-gray-500">{formatDateTime(sale.created_at)}</span>
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* Pagination Footer */}
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-200">
+                                    <div className="text-sm text-gray-500">
+                                        Showing <span className="font-semibold">{(currentPage - 1) * pageSize + 1}</span> to <span className="font-semibold">{Math.min(currentPage * pageSize, filteredSales.length)}</span> of <span className="font-semibold">{filteredSales.length}</span> transactions
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                            disabled={currentPage === 1}
+                                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            ← Previous
+                                        </button>
+                                        <span className="px-4 py-2 text-sm font-medium text-gray-900 bg-blue-50 border border-blue-200 rounded-lg">
+                                            Page {currentPage} of {totalPages || 1}
+                                        </span>
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                            disabled={currentPage >= totalPages}
+                                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Next →
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
                         )}
                     </CardContent>
                 </Card>
