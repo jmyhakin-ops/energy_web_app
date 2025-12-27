@@ -549,7 +549,8 @@ export default function SalesPage() {
     const [selectedPump, setSelectedPump] = useState<number | null>(null)
     const [selectedUser, setSelectedUser] = useState<number | null>(null)
     const [selectedShift, setSelectedShift] = useState<number | null>(null)
-    const [dateFilter, setDateFilter] = useState("")  // YYYY-MM-DD format
+    const [dateFrom, setDateFrom] = useState("")  // YYYY-MM-DD format
+    const [dateTo, setDateTo] = useState("")  // YYYY-MM-DD format
 
     useEffect(() => {
         fetchData()
@@ -620,10 +621,12 @@ export default function SalesPage() {
 
     // Filter sales by dropdown filters and search
     const filteredSales = sales.filter((sale) => {
-        // Date filter
-        if (dateFilter) {
+        // Date range filter
+        if (dateFrom || dateTo) {
             const saleDate = sale.created_at?.split('T')[0]
-            if (saleDate !== dateFilter) return false
+            if (!saleDate) return false
+            if (dateFrom && saleDate < dateFrom) return false
+            if (dateTo && saleDate > dateTo) return false
         }
         // Dropdown filters
         if (selectedStation && sale.station_id !== selectedStation) return false
@@ -661,7 +664,8 @@ export default function SalesPage() {
         setSelectedPump(null)
         setSelectedUser(null)
         setSelectedShift(null)
-        setDateFilter("")
+        setDateFrom("")
+        setDateTo("")
         setSearchQuery("")
         setCurrentPage(1)
     }
@@ -680,7 +684,8 @@ export default function SalesPage() {
     const exportToExcel = () => {
         // Build filter summary
         const filterParts = []
-        if (dateFilter) filterParts.push(`Date: ${dateFilter}`)
+        if (dateFrom) filterParts.push(`From: ${dateFrom}`)
+        if (dateTo) filterParts.push(`To: ${dateTo}`)
         if (selectedStation) filterParts.push(`Station: ${stations.find(s => s.station_id === selectedStation)?.station_name}`)
         if (selectedPump) filterParts.push(`Pump: ${pumps.find(p => p.pump_id === selectedPump)?.pump_name}`)
         if (selectedUser) filterParts.push(`Attendant: ${users.find(u => u.user_id === selectedUser)?.full_name}`)
@@ -693,29 +698,94 @@ export default function SalesPage() {
         const filteredCash = filteredSales.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0)
         const filteredLiters = filteredSales.reduce((acc, s) => acc + (s.liters_sold || 0), 0)
 
-        // Create CSV content with headers
-        let csv = '\ufeff'  // UTF-8 BOM for Excel
-        csv += '═══════════════════════════════════════════════════════════════════════════\n'
-        csv += 'ALPHA ENERGY - SALES REPORT\n'
-        csv += '═══════════════════════════════════════════════════════════════════════════\n'
-        csv += `Generated: ${new Date().toLocaleString()}\n`
-        csv += `Filter: ${filterSummary}\n`
-        csv += '\n'
-        csv += '───────────────────────────────────────────────────────────────────────────\n'
-        csv += '                              SUMMARY\n'
-        csv += '───────────────────────────────────────────────────────────────────────────\n'
-        csv += `Total Transactions,${filteredSales.length}\n`
-        csv += `Total Sales,KES ${filteredTotal.toLocaleString()}\n`
-        csv += `M-Pesa Sales,KES ${filteredMpesa.toLocaleString()}\n`
-        csv += `Cash Sales,KES ${filteredCash.toLocaleString()}\n`
-        csv += `Total Liters,${filteredLiters.toFixed(2)} L\n`
-        csv += '\n'
-        csv += '───────────────────────────────────────────────────────────────────────────\n'
-        csv += '                           TRANSACTION DETAILS\n'
-        csv += '───────────────────────────────────────────────────────────────────────────\n'
-        csv += 'Receipt No,Station,Pump,Shift,Liters,Amount (KES),Payment,M-Pesa Receipt,Attendant,Date/Time\n'
+        // Create beautiful HTML Excel file
+        let html = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; }
+    .header { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; padding: 20px; text-align: center; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .header p { margin: 5px 0 0; opacity: 0.9; }
+    .info-row { background: #f8fafc; padding: 10px 20px; border-bottom: 1px solid #e2e8f0; }
+    .summary-grid { display: flex; gap: 10px; padding: 15px; background: #f1f5f9; }
+    .summary-card { flex: 1; padding: 15px; border-radius: 8px; text-align: center; }
+    .summary-card.total { background: #dbeafe; border: 2px solid #3b82f6; }
+    .summary-card.mpesa { background: #dcfce7; border: 2px solid #22c55e; }
+    .summary-card.cash { background: #fef3c7; border: 2px solid #f59e0b; }
+    .summary-card.liters { background: #e0f2fe; border: 2px solid #0ea5e9; }
+    .summary-card h3 { margin: 0; font-size: 12px; color: #64748b; text-transform: uppercase; }
+    .summary-card p { margin: 5px 0 0; font-size: 18px; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th { background: #1e40af; color: white; padding: 12px 8px; text-align: left; font-size: 11px; text-transform: uppercase; }
+    td { padding: 10px 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
+    tr:nth-child(even) { background: #f8fafc; }
+    tr:hover { background: #eff6ff; }
+    .receipt { color: #1e40af; font-weight: 600; font-family: monospace; }
+    .amount { color: #059669; font-weight: bold; text-align: right; }
+    .mpesa-badge { background: #dcfce7; color: #166534; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+    .cash-badge { background: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+    .footer { background: #1e293b; color: white; padding: 15px; text-align: center; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>🏪 ALPHA ENERGY - SALES REPORT</h1>
+    <p>Generated: ${new Date().toLocaleString()}</p>
+</div>
+<div class="info-row">
+    <strong>📋 Filter:</strong> ${filterSummary}
+</div>
+<table style="width:100%; border:none; background:#f1f5f9; padding:15px;">
+<tr>
+    <td style="width:25%; padding:10px;">
+        <div style="background:#dbeafe; border:2px solid #3b82f6; border-radius:8px; padding:15px; text-align:center;">
+            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">💰 Total Sales</div>
+            <div style="font-size:20px; font-weight:bold; color:#1e40af;">KES ${filteredTotal.toLocaleString()}</div>
+            <div style="font-size:10px; color:#64748b;">${filteredSales.length} transactions</div>
+        </div>
+    </td>
+    <td style="width:25%; padding:10px;">
+        <div style="background:#dcfce7; border:2px solid #22c55e; border-radius:8px; padding:15px; text-align:center;">
+            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">📱 M-Pesa</div>
+            <div style="font-size:20px; font-weight:bold; color:#166534;">KES ${filteredMpesa.toLocaleString()}</div>
+        </div>
+    </td>
+    <td style="width:25%; padding:10px;">
+        <div style="background:#fef3c7; border:2px solid #f59e0b; border-radius:8px; padding:15px; text-align:center;">
+            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">💵 Cash</div>
+            <div style="font-size:20px; font-weight:bold; color:#92400e;">KES ${filteredCash.toLocaleString()}</div>
+        </div>
+    </td>
+    <td style="width:25%; padding:10px;">
+        <div style="background:#e0f2fe; border:2px solid #0ea5e9; border-radius:8px; padding:15px; text-align:center;">
+            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">⛽ Total Liters</div>
+            <div style="font-size:20px; font-weight:bold; color:#0369a1;">${filteredLiters.toFixed(2)} L</div>
+        </div>
+    </td>
+</tr>
+</table>
+<table>
+<thead>
+<tr>
+    <th style="width:12%">Receipt No</th>
+    <th style="width:12%">Station</th>
+    <th style="width:10%">Pump</th>
+    <th style="width:8%">Shift</th>
+    <th style="width:8%; text-align:right">Liters</th>
+    <th style="width:10%; text-align:right">Amount</th>
+    <th style="width:10%">Payment</th>
+    <th style="width:12%">M-Pesa Receipt</th>
+    <th style="width:10%">Attendant</th>
+    <th style="width:12%">Date/Time</th>
+</tr>
+</thead>
+<tbody>
+`
 
-        filteredSales.forEach(sale => {
+        filteredSales.forEach((sale, index) => {
             const stationName = stations.find(s => s.station_id === sale.station_id)?.station_name || '—'
             const pumpName = pumps.find(p => p.pump_id === sale.pump_id)?.pump_name || '—'
             const attendantName = users.find(u => u.user_id === sale.attendant_id)?.full_name || '—'
@@ -723,35 +793,47 @@ export default function SalesPage() {
             const shiftName = pumpShift ? shifts.find(s => s.shift_id === pumpShift.shift_id)?.shift_name || '—' : '—'
             const isMpesa = sale.payment_method === "mpesa" || sale.transaction_status === "SUCCESS"
             const isCash = sale.payment_method === "cash" || sale.transaction_status === "CASH"
-            const paymentType = isMpesa ? '📱 M-PESA' : isCash ? '💵 CASH' : sale.transaction_status || '—'
+            const paymentBadge = isMpesa
+                ? '<span class="mpesa-badge">📱 M-PESA</span>'
+                : isCash
+                    ? '<span class="cash-badge">💵 CASH</span>'
+                    : sale.transaction_status || '—'
 
-            csv += `${sale.sale_id_no || `RCP-${String(sale.sale_id).padStart(5, '0')}`},`
-            csv += `"${stationName}",`
-            csv += `"${pumpName}",`
-            csv += `"${shiftName}",`
-            csv += `${sale.liters_sold?.toFixed(2) || '0.00'},`
-            csv += `${(sale.amount || sale.total_amount || 0).toFixed(2)},`
-            csv += `${paymentType},`
-            csv += `${sale.mpesa_receipt_number || ''},`
-            csv += `"${attendantName}",`
-            csv += `${sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}\n`
+            html += `<tr>
+    <td class="receipt">${sale.sale_id_no || `RCP-${String(sale.sale_id).padStart(5, '0')}`}</td>
+    <td>${stationName}</td>
+    <td>${pumpName}</td>
+    <td>${shiftName}</td>
+    <td style="text-align:right">${sale.liters_sold?.toFixed(2) || '0.00'} L</td>
+    <td class="amount">KES ${(sale.amount || sale.total_amount || 0).toLocaleString()}</td>
+    <td>${paymentBadge}</td>
+    <td style="font-family:monospace; font-size:10px; color:#64748b;">${sale.mpesa_receipt_number || '—'}</td>
+    <td>${attendantName}</td>
+    <td style="font-size:11px; color:#64748b;">${sale.created_at ? new Date(sale.created_at).toLocaleString() : '—'}</td>
+</tr>`
         })
 
-        csv += '\n═══════════════════════════════════════════════════════════════════════════\n'
-        csv += '                          END OF REPORT\n'
-        csv += '═══════════════════════════════════════════════════════════════════════════\n'
+        html += `
+</tbody>
+</table>
+<div class="footer">
+    <p>© ${new Date().getFullYear()} Alpha Energy | Report Generated by Alpha Energy Web App</p>
+</div>
+</body>
+</html>`
 
-        // Download
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+        // Download as .xls (Excel will open HTML files)
+        const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
         const link = document.createElement('a')
         const url = URL.createObjectURL(blob)
+        const dateStr = dateFrom || dateTo || new Date().toISOString().split('T')[0]
         link.setAttribute('href', url)
-        link.setAttribute('download', `Sales_Report_${dateFilter || new Date().toISOString().split('T')[0]}.csv`)
+        link.setAttribute('download', `Alpha_Energy_Sales_Report_${dateStr}.xls`)
         link.style.visibility = 'hidden'
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
-        toast.success('📊 Exported!', `${filteredSales.length} transactions exported to Excel`)
+        toast.success('📊 Report Exported!', `${filteredSales.length} transactions exported to Excel`)
     }
 
     const getPaymentColor = (method: string) => {
@@ -867,14 +949,24 @@ export default function SalesPage() {
                                 <X className="w-3 h-3" /> Clear All
                             </button>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                            {/* Date Filter */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                            {/* From Date */}
                             <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">📅 Date</label>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">📅 From Date</label>
                                 <input
                                     type="date"
-                                    value={dateFilter}
-                                    onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1) }}
+                                    value={dateFrom}
+                                    onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1) }}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                />
+                            </div>
+                            {/* To Date */}
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">📅 To Date</label>
+                                <input
+                                    type="date"
+                                    value={dateTo}
+                                    onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1) }}
                                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
                                 />
                             </div>
