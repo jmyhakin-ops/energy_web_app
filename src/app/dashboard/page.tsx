@@ -180,7 +180,8 @@ export default function DashboardPage() {
                 supabase.from("pumps").select("pump_id").eq("is_active", true),
                 supabase.from("users_new").select("user_id").eq("is_active", true),
                 supabase.from("pump_shifts").select("pump_shift_id").eq("is_closed", false),
-                supabase.from("sales").select("sale_id, total_amount, payment_method"),
+                // Fetch sales with BOTH amount fields to support mobile and web
+                supabase.from("sales").select("sale_id, amount, total_amount, payment_method, transaction_status"),
                 supabase.from("payroll").select("net_salary, payment_status"),
                 supabase.from("expenses").select("amount, status"),
                 supabase.from("salary_advances").select("amount, status").eq("status", "pending"),
@@ -197,10 +198,12 @@ export default function DashboardPage() {
             const advancesData = advancesRes.data || []
             const vouchersData = vouchersRes.data || []
 
-            // Calculate stats from real data
-            const totalSales = salesData.reduce((acc, s) => acc + (s.total_amount || 0), 0)
-            const mpesaSales = salesData.filter(s => s.payment_method === "mpesa").reduce((acc, s) => acc + (s.total_amount || 0), 0)
-            const cashSales = salesData.filter(s => s.payment_method === "cash").reduce((acc, s) => acc + (s.total_amount || 0), 0)
+            // Calculate stats - support BOTH 'amount' (mobile) and 'total_amount' (web)
+            const totalSales = salesData.reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
+            // M-Pesa: payment_method='mpesa' OR transaction_status='SUCCESS' (from mobile)
+            const mpesaSales = salesData.filter(s => s.payment_method === "mpesa" || s.transaction_status === "SUCCESS").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
+            // Cash: payment_method='cash' OR transaction_status='CASH'
+            const cashSales = salesData.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
             const totalPayroll = payrollData.reduce((acc, p) => acc + (p.net_salary || 0), 0)
             const totalExpenses = expensesData.reduce((acc, e) => acc + (e.amount || 0), 0)
             const pendingAdvances = advancesData.reduce((acc, a) => acc + (a.amount || 0), 0)

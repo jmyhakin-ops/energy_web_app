@@ -529,6 +529,7 @@ function AddSaleModal({
 // Main Sales Page
 export default function SalesPage() {
     const [sales, setSales] = useState<Sale[]>([])
+    const [totalSalesCount, setTotalSalesCount] = useState(0)  // Actual total count from DB
     const [stations, setStations] = useState<Station[]>([])
     const [pumps, setPumps] = useState<Pump[]>([])
     const [fuelTypes, setFuelTypes] = useState<FuelType[]>([])
@@ -558,6 +559,8 @@ export default function SalesPage() {
                         .select("*, station:stations(station_id, station_name), pump:pumps(pump_id, pump_name), attendant:users_new(user_id, full_name)")
                         .order("created_at", { ascending: false })
                         .limit(200),
+                    // Get TOTAL count of all sales for receipt number
+                    supabase.from("sales").select("sale_id", { count: "exact", head: true }),
                 ])
 
                 setStations(stationsRes.data || [])
