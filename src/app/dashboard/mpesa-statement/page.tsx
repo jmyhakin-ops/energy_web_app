@@ -125,23 +125,60 @@ export default function MpesaStatementPage() {
             const stationMap = new Map<number, Station>()
             stationsData.forEach(s => stationMap.set(s.station_id, s))
 
-            // Fetch sales data to get liters_sold
-            const salesRes = await supabase.from("sales").select("checkout_request_id, liters_sold, price_per_liter")
-            const salesMap = new Map<string, { liters_sold: number | null; price_per_liter: number | null }>()
+            // Fetch sales data with ALL relevant fields to correlate with M-Pesa transactions
+            const salesRes = await supabase.from("sales").select("checkout_request_id, mpesa_receipt_number, liters_sold, price_per_liter, total_amount, amount")
+
+            // Create two maps for matching - by checkout_request_id AND by mpesa_receipt_number
+            const salesByCheckoutId = new Map<string, { liters_sold: number | null; price_per_liter: number | null; amount: number }>()
+            const salesByReceiptNumber = new Map<string, { liters_sold: number | null; price_per_liter: number | null; amount: number }>()
+
                 ; (salesRes.data || []).forEach(s => {
+                    const saleInfo = {
+                        liters_sold: s.liters_sold,
+                        price_per_liter: s.price_per_liter,
+                        amount: s.total_amount || s.amount || 0
+                    }
                     if (s.checkout_request_id) {
-                        salesMap.set(s.checkout_request_id, { liters_sold: s.liters_sold, price_per_liter: s.price_per_liter })
+                        salesByCheckoutId.set(s.checkout_request_id, saleInfo)
+                    }
+                    if (s.mpesa_receipt_number) {
+                        salesByReceiptNumber.set(s.mpesa_receipt_number, saleInfo)
                     }
                 })
 
+            // Also fetch current fuel prices for fallback calculation
+            const fuelPricesRes = await supabase.from("fuel_types").select("fuel_name, price_per_liter").eq("is_active", true)
+            const defaultPricePerLiter = (fuelPricesRes.data || []).find(f => f.fuel_name?.toLowerCase().includes('petrol'))?.price_per_liter ||
+                (fuelPricesRes.data || [])[0]?.price_per_liter || 180 // Default fallback
+
             const transactionsRes = await supabase.from("mpesa_transactions").select("*").order("created_at", { ascending: false })
             const transactionsWithStations = (transactionsRes.data || []).map(tx => {
-                const saleData = salesMap.get(tx.checkout_request_id)
+                // Try to match by checkout_request_id first, then by mpesa_receipt_number
+                let saleData = tx.checkout_request_id ? salesByCheckoutId.get(tx.checkout_request_id) : null
+                if (!saleData && tx.mpesa_receipt_number) {
+                    saleData = salesByReceiptNumber.get(tx.mpesa_receipt_number)
+                }
+                if (!saleData && tx.mpesa_receipt) {
+                    saleData = salesByReceiptNumber.get(tx.mpesa_receipt)
+                }
+
+                // Calculate liters: use stored value, or calculate from amount and price
+                let liters_sold = saleData?.liters_sold || null
+                let price_per_liter = saleData?.price_per_liter || null
+
+                // If no liters_sold stored but we have a completed transaction, calculate from amount
+                if (!liters_sold && tx.status === 'completed' && tx.amount > 0) {
+                    // Use price from sale if available, otherwise use current fuel price
+                    const priceToUse = price_per_liter || defaultPricePerLiter
+                    liters_sold = tx.amount / priceToUse
+                    price_per_liter = priceToUse
+                }
+
                 return {
                     ...tx,
                     station: tx.station_id ? stationMap.get(tx.station_id) : undefined,
-                    liters_sold: saleData?.liters_sold || null,
-                    price_per_liter: saleData?.price_per_liter || null
+                    liters_sold,
+                    price_per_liter
                 }
             })
             setTransactions(transactionsWithStations)
