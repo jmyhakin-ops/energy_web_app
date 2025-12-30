@@ -236,17 +236,48 @@ export default function MpesaReportPage() {
                 return
             }
 
-            // Fetch all data in parallel
-            const [transactionsRes, stationsRes, pumpsRes, usersRes, shiftsRes] = await Promise.all([
-                supabase.from("mpesa_transactions").select("*, station:stations(station_id, station_name, station_code)").order("created_at", { ascending: false }),
-                supabase.from("stations").select("station_id, station_name, station_code").eq("is_active", true),
-                supabase.from("pumps").select("pump_id, pump_name, station_id").eq("is_active", true),
-                supabase.from("users_new").select("user_id, full_name, username").eq("is_active", true),
+            // First, fetch stations separately (without is_active filter to ensure we get all)
+            const stationsRes = await supabase
+                .from("stations")
+                .select("station_id, station_name, station_code")
+                .order("station_name")
+
+            console.log("Stations loaded:", stationsRes.data?.length, stationsRes.error)
+
+            const stationsData = stationsRes.data || []
+            setStations(stationsData)
+
+            // Create a station lookup map
+            const stationMap = new Map<number, Station>()
+            stationsData.forEach(s => stationMap.set(s.station_id, s))
+
+            // Fetch M-Pesa transactions
+            const transactionsRes = await supabase
+                .from("mpesa_transactions")
+                .select("*")
+                .order("created_at", { ascending: false })
+
+            console.log("Transactions loaded:", transactionsRes.data?.length, transactionsRes.error)
+
+            // Map transactions with station data from lookup
+            const transactionsWithStations = (transactionsRes.data || []).map(tx => ({
+                ...tx,
+                station: tx.station_id ? stationMap.get(tx.station_id) : undefined
+            }))
+
+            setTransactions(transactionsWithStations)
+
+            // Fetch other data in parallel
+            const [pumpsRes, usersRes, shiftsRes] = await Promise.all([
+                supabase.from("pumps").select("pump_id, pump_name, station_id"),
+                supabase.from("users_new").select("user_id, full_name, username"),
                 supabase.from("shifts").select("shift_id, shift_name"),
             ])
 
-            setTransactions(transactionsRes.data || [])
-            setStations(stationsRes.data || [])
+            console.log("Pumps loaded:", pumpsRes.data?.length, pumpsRes.error)
+            console.log("Users loaded:", usersRes.data?.length, usersRes.error)
+            console.log("Shifts loaded:", shiftsRes.data?.length, shiftsRes.error)
+
             setPumps(pumpsRes.data || [])
             setUsers(usersRes.data || [])
             setShifts(shiftsRes.data || [])
