@@ -32,6 +32,9 @@ interface MpesaTransaction {
     station?: { station_id: number; station_name: string; station_code: string }
     liters_sold?: number | null
     price_per_liter?: number | null
+    attendant_id?: number | null
+    attendant?: { user_id: number; full_name: string; username: string } | null
+    pump_name?: string | null
 }
 
 interface Station { station_id: number; station_name: string; station_code: string }
@@ -62,7 +65,7 @@ function StatCard({ title, value, subValue, icon: Icon, gradient, trend }: {
 }
 
 // ==================== STATUS BADGE ====================
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, resultDesc }: { status: string; resultDesc?: string | null }) {
     const config: Record<string, { bg: string; text: string; icon: any; label: string }> = {
         completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle, label: 'Completed' },
         pending: { bg: 'bg-amber-100', text: 'text-amber-700', icon: Clock, label: 'Pending' },
@@ -70,10 +73,37 @@ function StatusBadge({ status }: { status: string }) {
         cancelled: { bg: 'bg-gray-100', text: 'text-gray-700', icon: AlertCircle, label: 'Cancelled' },
     }
     const { bg, text, icon: Icon, label } = config[status] || config.pending
+
+    // Format result description to be more user-friendly
+    const formatResultDesc = (desc: string | null | undefined): string | null => {
+        if (!desc) return null
+        // Common M-Pesa result descriptions mapped to friendly messages
+        const descLower = desc.toLowerCase()
+        if (descLower.includes('cancelled') && descLower.includes('user')) return 'Cancelled by customer'
+        if (descLower.includes('insufficient')) return 'Insufficient funds'
+        if (descLower.includes('timeout') || descLower.includes('timed out')) return 'Request timed out'
+        if (descLower.includes('wrong pin')) return 'Wrong M-Pesa PIN'
+        if (descLower.includes('limit')) return 'Transaction limit exceeded'
+        if (descLower.includes('success')) return 'Payment successful'
+        if (descLower.includes('pending')) return 'Awaiting confirmation'
+        if (descLower.includes('failed')) return 'Transaction failed'
+        // Return original if no match, but truncate if too long
+        return desc.length > 30 ? desc.substring(0, 27) + '...' : desc
+    }
+
+    const friendlyDesc = formatResultDesc(resultDesc)
+
     return (
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${bg} ${text}`}>
-            <Icon className="w-3.5 h-3.5" /> {label}
-        </span>
+        <div className="flex flex-col items-center gap-1">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${bg} ${text}`}>
+                <Icon className="w-3.5 h-3.5" /> {label}
+            </span>
+            {friendlyDesc && status !== 'completed' && (
+                <span className="text-[10px] text-gray-500 max-w-[120px] text-center leading-tight">
+                    {friendlyDesc}
+                </span>
+            )}
+        </div>
     )
 }
 
@@ -126,17 +156,37 @@ export default function MpesaStatementPage() {
             stationsData.forEach(s => stationMap.set(s.station_id, s))
 
             // Fetch sales data with ALL relevant fields to correlate with M-Pesa transactions
-            const salesRes = await supabase.from("sales").select("checkout_request_id, mpesa_receipt_number, liters_sold, price_per_liter, total_amount, amount")
+            // Include attendant_id and pump_id to get attendant info
+            const salesRes = await supabase.from("sales").select(`
+                checkout_request_id, mpesa_receipt_number, liters_sold, price_per_liter, 
+                total_amount, amount, attendant_id, pump_id,
+                pump:pumps(pump_name)
+            `)
+
+            // Fetch all attendants/users for mapping
+            const usersRes = await supabase.from("users_new").select("user_id, full_name, username")
+            const usersMap = new Map<number, { user_id: number; full_name: string; username: string }>()
+                ; (usersRes.data || []).forEach(u => usersMap.set(u.user_id, u))
+            setUsers(usersRes.data || [])
 
             // Create two maps for matching - by checkout_request_id AND by mpesa_receipt_number
-            const salesByCheckoutId = new Map<string, { liters_sold: number | null; price_per_liter: number | null; amount: number }>()
-            const salesByReceiptNumber = new Map<string, { liters_sold: number | null; price_per_liter: number | null; amount: number }>()
+            interface SaleInfo {
+                liters_sold: number | null
+                price_per_liter: number | null
+                amount: number
+                attendant_id: number | null
+                pump_name: string | null
+            }
+            const salesByCheckoutId = new Map<string, SaleInfo>()
+            const salesByReceiptNumber = new Map<string, SaleInfo>()
 
-                ; (salesRes.data || []).forEach(s => {
-                    const saleInfo = {
+                ; (salesRes.data || []).forEach((s: any) => {
+                    const saleInfo: SaleInfo = {
                         liters_sold: s.liters_sold,
                         price_per_liter: s.price_per_liter,
-                        amount: s.total_amount || s.amount || 0
+                        amount: s.total_amount || s.amount || 0,
+                        attendant_id: s.attendant_id,
+                        pump_name: s.pump?.pump_name || null
                     }
                     if (s.checkout_request_id) {
                         salesByCheckoutId.set(s.checkout_request_id, saleInfo)
@@ -174,23 +224,29 @@ export default function MpesaStatementPage() {
                     price_per_liter = priceToUse
                 }
 
+                // Get attendant info
+                const attendant_id = saleData?.attendant_id || null
+                const attendant = attendant_id ? usersMap.get(attendant_id) || null : null
+                const pump_name = saleData?.pump_name || null
+
                 return {
                     ...tx,
                     station: tx.station_id ? stationMap.get(tx.station_id) : undefined,
                     liters_sold,
-                    price_per_liter
+                    price_per_liter,
+                    attendant_id,
+                    attendant,
+                    pump_name
                 }
             })
             setTransactions(transactionsWithStations)
 
-            const [pumpsRes, usersRes, shiftsRes] = await Promise.all([
+            const [pumpsRes, shiftsRes] = await Promise.all([
                 supabase.from("pumps").select("pump_id, pump_name, station_id"),
-                supabase.from("users_new").select("user_id, full_name, username"),
                 supabase.from("shifts").select("shift_id, shift_name"),
             ])
 
             setPumps(pumpsRes.data || [])
-            setUsers(usersRes.data || [])
             setShifts(shiftsRes.data || [])
         } catch (error) {
             console.error("Error fetching data:", error)
@@ -246,7 +302,7 @@ export default function MpesaStatementPage() {
 
     // Export to Excel with styling
     const exportToExcel = () => {
-        const headers = ["#", "Date & Time", "Phone Number", "Amount (KES)", "Liters Sold", "Status", "M-Pesa Receipt", "Station", "Checkout ID"]
+        const headers = ["#", "Date & Time", "Phone Number", "Amount (KES)", "Liters Sold", "Status", "Status Detail", "M-Pesa Receipt", "Station", "Attendant", "Pump"]
         const rows = filteredTransactions.map((tx, i) => [
             i + 1,
             new Date(tx.created_at).toLocaleString(),
@@ -254,9 +310,11 @@ export default function MpesaStatementPage() {
             tx.amount,
             tx.liters_sold?.toFixed(2) || '-',
             tx.status.toUpperCase(),
+            tx.result_desc || '-',
             tx.mpesa_receipt_number || '-',
             tx.station?.station_name || '-',
-            tx.checkout_request_id
+            tx.attendant?.full_name || '-',
+            tx.pump_name || '-'
         ])
 
         const csvContent = [
@@ -323,7 +381,7 @@ export default function MpesaStatementPage() {
                 <div class="stat-card"><h3>📈 Success Rate</h3><p>${stats.successRate.toFixed(1)}%</p></div>
             </div>
             <table>
-                <thead><tr><th>#</th><th>Date & Time</th><th>Phone</th><th>Amount</th><th>Liters</th><th>Status</th><th>Receipt</th><th>Station</th></tr></thead>
+                <thead><tr><th>#</th><th>Date & Time</th><th>Phone</th><th>Amount</th><th>Liters</th><th>Status</th><th>Receipt</th><th>Station</th><th>Attendant</th></tr></thead>
                 <tbody>
                     ${filteredTransactions.map((tx, i) => `
                         <tr>
@@ -332,9 +390,13 @@ export default function MpesaStatementPage() {
                             <td>${tx.phone || '-'}</td>
                             <td style="font-weight: 600;">KES ${tx.amount.toLocaleString()}</td>
                             <td style="color: #059669; font-weight: 600;">${tx.liters_sold?.toFixed(2) || '-'} L</td>
-                            <td class="status-${tx.status}">${tx.status.toUpperCase()}</td>
+                            <td class="status-${tx.status}">
+                                ${tx.status.toUpperCase()}
+                                ${tx.result_desc && tx.status !== 'completed' ? `<br><small style="color:#6b7280;font-size:10px;">${tx.result_desc}</small>` : ''}
+                            </td>
                             <td style="font-family: monospace;">${tx.mpesa_receipt_number || '-'}</td>
                             <td>${tx.station?.station_name || '-'}</td>
+                            <td>${tx.attendant?.full_name || '-'}${tx.pump_name ? `<br><small style="color:#6b7280;">⛽ ${tx.pump_name}</small>` : ''}</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -490,15 +552,16 @@ export default function MpesaStatementPage() {
                                 <table className="w-full min-w-[900px]">
                                     <thead>
                                         <tr className="bg-gradient-to-r from-gray-50 to-slate-50 border-b border-gray-200">
-                                            <th className="text-left py-4 px-4 text-xs font-bold text-gray-600 uppercase">#</th>
-                                            <th className="text-left py-4 px-4 text-xs font-bold text-gray-600 uppercase">📅 Date & Time</th>
-                                            <th className="text-left py-4 px-4 text-xs font-bold text-gray-600 uppercase">📱 Phone</th>
-                                            <th className="text-right py-4 px-4 text-xs font-bold text-gray-600 uppercase">💰 Amount</th>
-                                            <th className="text-right py-4 px-4 text-xs font-bold text-gray-600 uppercase">⛽ Liters</th>
-                                            <th className="text-center py-4 px-4 text-xs font-bold text-gray-600 uppercase">✅ Status</th>
-                                            <th className="text-left py-4 px-4 text-xs font-bold text-gray-600 uppercase">🧾 Receipt</th>
-                                            <th className="text-left py-4 px-4 text-xs font-bold text-gray-600 uppercase">🏢 Station</th>
-                                            <th className="text-center py-4 px-4 text-xs font-bold text-gray-600 uppercase">⚡ Actions</th>
+                                            <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">#</th>
+                                            <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">📅 Date & Time</th>
+                                            <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">📱 Phone</th>
+                                            <th className="text-right py-4 px-3 text-xs font-bold text-gray-600 uppercase">💰 Amount</th>
+                                            <th className="text-right py-4 px-3 text-xs font-bold text-gray-600 uppercase">⛽ Liters</th>
+                                            <th className="text-center py-4 px-3 text-xs font-bold text-gray-600 uppercase">✅ Status</th>
+                                            <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">🧾 Receipt</th>
+                                            <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">🏢 Station</th>
+                                            <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">👤 Attendant</th>
+                                            <th className="text-center py-4 px-3 text-xs font-bold text-gray-600 uppercase">⚡ Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -524,7 +587,7 @@ export default function MpesaStatementPage() {
                                                         </div>
                                                     ) : <span className="text-gray-400">-</span>}
                                                 </td>
-                                                <td className="py-4 px-4 text-center"><StatusBadge status={tx.status} /></td>
+                                                <td className="py-4 px-4 text-center"><StatusBadge status={tx.status} resultDesc={tx.result_desc} /></td>
                                                 <td className="py-4 px-4">
                                                     {tx.mpesa_receipt_number ? (
                                                         <div className="flex items-center gap-2">
@@ -533,12 +596,25 @@ export default function MpesaStatementPage() {
                                                         </div>
                                                     ) : <span className="text-gray-400 text-sm">-</span>}
                                                 </td>
-                                                <td className="py-4 px-4">
+                                                <td className="py-4 px-3">
                                                     {tx.station ? (
                                                         <div><p className="font-medium text-gray-900 text-sm">{tx.station.station_name}</p><p className="text-xs text-gray-500">{tx.station.station_code}</p></div>
                                                     ) : <span className="text-gray-400 text-sm">-</span>}
                                                 </td>
-                                                <td className="py-4 px-4 text-center">
+                                                <td className="py-4 px-3">
+                                                    {tx.attendant ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                                                                {tx.attendant.full_name.charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium text-gray-900 text-sm">{tx.attendant.full_name}</p>
+                                                                {tx.pump_name && <p className="text-xs text-gray-500">⛽ {tx.pump_name}</p>}
+                                                            </div>
+                                                        </div>
+                                                    ) : <span className="text-gray-400 text-sm">-</span>}
+                                                </td>
+                                                <td className="py-4 px-3 text-center">
                                                     <button className="p-2 hover:bg-blue-100 rounded-lg transition-colors"><Eye className="w-4 h-4 text-gray-400 hover:text-blue-600" /></button>
                                                 </td>
                                             </tr>
