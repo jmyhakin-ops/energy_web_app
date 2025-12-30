@@ -46,6 +46,7 @@ const navItems = [
     { label: "Refills", icon: Truck, href: "/dashboard/refills" },
     { label: "M-Pesa", icon: Smartphone, href: "/dashboard/mpesa" },
     { label: "M-Pesa Report", icon: TrendingUp, href: "/dashboard/mpesa-report" },
+    { label: "M-Pesa Statement", icon: FileText, href: "/dashboard/mpesa-statement" },
     { label: "Payroll", icon: Banknote, href: "/dashboard/payroll" },
     { label: "Advances", icon: CreditCard, href: "/dashboard/advances" },
     { label: "Expenses", icon: Receipt, href: "/dashboard/expenses" },
