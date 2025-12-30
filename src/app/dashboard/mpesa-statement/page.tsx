@@ -5,7 +5,7 @@ import {
     FileText, Download, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
     Calendar, Building2, Users, Fuel, RefreshCw, Printer, FileSpreadsheet,
     CheckCircle, Clock, XCircle, AlertCircle, Phone, Receipt, TrendingUp,
-    DollarSign, Activity, Zap, Search, Copy, Eye
+    DollarSign, Activity, Zap, Search, Copy, Eye, Droplet
 } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -30,6 +30,8 @@ interface MpesaTransaction {
     created_at: string
     completed_at: string | null
     station?: { station_id: number; station_name: string; station_code: string }
+    liters_sold?: number | null
+    price_per_liter?: number | null
 }
 
 interface Station { station_id: number; station_name: string; station_code: string }
@@ -123,11 +125,25 @@ export default function MpesaStatementPage() {
             const stationMap = new Map<number, Station>()
             stationsData.forEach(s => stationMap.set(s.station_id, s))
 
+            // Fetch sales data to get liters_sold
+            const salesRes = await supabase.from("sales").select("checkout_request_id, liters_sold, price_per_liter")
+            const salesMap = new Map<string, { liters_sold: number | null; price_per_liter: number | null }>()
+                ; (salesRes.data || []).forEach(s => {
+                    if (s.checkout_request_id) {
+                        salesMap.set(s.checkout_request_id, { liters_sold: s.liters_sold, price_per_liter: s.price_per_liter })
+                    }
+                })
+
             const transactionsRes = await supabase.from("mpesa_transactions").select("*").order("created_at", { ascending: false })
-            const transactionsWithStations = (transactionsRes.data || []).map(tx => ({
-                ...tx,
-                station: tx.station_id ? stationMap.get(tx.station_id) : undefined
-            }))
+            const transactionsWithStations = (transactionsRes.data || []).map(tx => {
+                const saleData = salesMap.get(tx.checkout_request_id)
+                return {
+                    ...tx,
+                    station: tx.station_id ? stationMap.get(tx.station_id) : undefined,
+                    liters_sold: saleData?.liters_sold || null,
+                    price_per_liter: saleData?.price_per_liter || null
+                }
+            })
             setTransactions(transactionsWithStations)
 
             const [pumpsRes, usersRes, shiftsRes] = await Promise.all([
@@ -163,8 +179,10 @@ export default function MpesaStatementPage() {
     const stats = useMemo(() => {
         const completed = filteredTransactions.filter(t => t.status === 'completed')
         const totalAmount = completed.reduce((sum, t) => sum + t.amount, 0)
+        const totalLiters = completed.reduce((sum, t) => sum + (t.liters_sold || 0), 0)
         return {
             totalAmount,
+            totalLiters,
             totalTransactions: filteredTransactions.length,
             completedCount: completed.length,
             pendingCount: filteredTransactions.filter(t => t.status === 'pending').length,
@@ -191,12 +209,13 @@ export default function MpesaStatementPage() {
 
     // Export to Excel with styling
     const exportToExcel = () => {
-        const headers = ["#", "Date & Time", "Phone Number", "Amount (KES)", "Status", "M-Pesa Receipt", "Station", "Checkout ID"]
+        const headers = ["#", "Date & Time", "Phone Number", "Amount (KES)", "Liters Sold", "Status", "M-Pesa Receipt", "Station", "Checkout ID"]
         const rows = filteredTransactions.map((tx, i) => [
             i + 1,
             new Date(tx.created_at).toLocaleString(),
             tx.phone || '-',
             tx.amount,
+            tx.liters_sold?.toFixed(2) || '-',
             tx.status.toUpperCase(),
             tx.mpesa_receipt_number || '-',
             tx.station?.station_name || '-',
@@ -208,6 +227,7 @@ export default function MpesaStatementPage() {
             `📅 Period: ${dateFrom} to ${dateTo}`,
             `📊 Total Transactions: ${filteredTransactions.length}`,
             `💰 Total Amount: KES ${stats.totalAmount.toLocaleString()}`,
+            `⛽ Total Liters: ${stats.totalLiters.toFixed(2)} L`,
             `✅ Success Rate: ${stats.successRate.toFixed(1)}%`,
             "",
             headers.join(","),
@@ -261,12 +281,12 @@ export default function MpesaStatementPage() {
             </div>
             <div class="stats">
                 <div class="stat-card"><h3>💰 Total Revenue</h3><p>KES ${stats.totalAmount.toLocaleString()}</p></div>
-                <div class="stat-card"><h3>📊 Total Transactions</h3><p>${stats.totalTransactions}</p></div>
+                <div class="stat-card"><h3>⛽ Total Liters</h3><p>${stats.totalLiters.toFixed(2)} L</p></div>
                 <div class="stat-card"><h3>✅ Successful</h3><p>${stats.completedCount}</p></div>
                 <div class="stat-card"><h3>📈 Success Rate</h3><p>${stats.successRate.toFixed(1)}%</p></div>
             </div>
             <table>
-                <thead><tr><th>#</th><th>Date & Time</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Station</th></tr></thead>
+                <thead><tr><th>#</th><th>Date & Time</th><th>Phone</th><th>Amount</th><th>Liters</th><th>Status</th><th>Receipt</th><th>Station</th></tr></thead>
                 <tbody>
                     ${filteredTransactions.map((tx, i) => `
                         <tr>
@@ -274,6 +294,7 @@ export default function MpesaStatementPage() {
                             <td>${new Date(tx.created_at).toLocaleString()}</td>
                             <td>${tx.phone || '-'}</td>
                             <td style="font-weight: 600;">KES ${tx.amount.toLocaleString()}</td>
+                            <td style="color: #059669; font-weight: 600;">${tx.liters_sold?.toFixed(2) || '-'} L</td>
                             <td class="status-${tx.status}">${tx.status.toUpperCase()}</td>
                             <td style="font-family: monospace;">${tx.mpesa_receipt_number || '-'}</td>
                             <td>${tx.station?.station_name || '-'}</td>
@@ -323,8 +344,9 @@ export default function MpesaStatementPage() {
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
                     <StatCard title="Total Revenue" value={formatCurrency(stats.totalAmount)} subValue={`${stats.completedCount} successful`} icon={DollarSign} gradient="bg-gradient-to-br from-emerald-500 via-green-500 to-teal-600" trend="+12.5%" />
+                    <StatCard title="⛽ Total Liters" value={`${stats.totalLiters.toFixed(2)} L`} subValue="Fuel sold" icon={Droplet} gradient="bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600" />
                     <StatCard title="Total Transactions" value={stats.totalTransactions.toLocaleString()} subValue={`${stats.pendingCount} pending`} icon={Receipt} gradient="bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600" />
                     <StatCard title="Success Rate" value={`${stats.successRate.toFixed(1)}%`} subValue={`${stats.failedCount} failed`} icon={TrendingUp} gradient="bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-600" />
                     <StatCard title="Average Amount" value={formatCurrency(stats.completedCount > 0 ? stats.totalAmount / stats.completedCount : 0)} subValue="Per transaction" icon={Activity} gradient="bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500" />
@@ -435,6 +457,7 @@ export default function MpesaStatementPage() {
                                             <th className="text-left py-4 px-4 text-xs font-bold text-gray-600 uppercase">📅 Date & Time</th>
                                             <th className="text-left py-4 px-4 text-xs font-bold text-gray-600 uppercase">📱 Phone</th>
                                             <th className="text-right py-4 px-4 text-xs font-bold text-gray-600 uppercase">💰 Amount</th>
+                                            <th className="text-right py-4 px-4 text-xs font-bold text-gray-600 uppercase">⛽ Liters</th>
                                             <th className="text-center py-4 px-4 text-xs font-bold text-gray-600 uppercase">✅ Status</th>
                                             <th className="text-left py-4 px-4 text-xs font-bold text-gray-600 uppercase">🧾 Receipt</th>
                                             <th className="text-left py-4 px-4 text-xs font-bold text-gray-600 uppercase">🏢 Station</th>
@@ -456,6 +479,14 @@ export default function MpesaStatementPage() {
                                                     </div>
                                                 </td>
                                                 <td className="py-4 px-4 text-right"><span className="font-bold text-gray-900">{formatCurrency(tx.amount)}</span></td>
+                                                <td className="py-4 px-4 text-right">
+                                                    {tx.liters_sold ? (
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <Droplet className="w-3.5 h-3.5 text-cyan-600" />
+                                                            <span className="font-semibold text-cyan-700">{tx.liters_sold.toFixed(2)} L</span>
+                                                        </div>
+                                                    ) : <span className="text-gray-400">-</span>}
+                                                </td>
                                                 <td className="py-4 px-4 text-center"><StatusBadge status={tx.status} /></td>
                                                 <td className="py-4 px-4">
                                                     {tx.mpesa_receipt_number ? (
@@ -523,6 +554,8 @@ function getMockData(): MpesaTransaction[] {
         station_id: (i % 3) + 1,
         created_at: new Date(Date.now() - i * 3600000).toISOString(),
         completed_at: i % 3 === 0 ? new Date(Date.now() - i * 3600000 + 60000).toISOString() : null,
-        station: { station_id: (i % 3) + 1, station_name: `Station ${(i % 3) + 1}`, station_code: `STN-00${(i % 3) + 1}` }
+        station: { station_id: (i % 3) + 1, station_name: `Station ${(i % 3) + 1}`, station_code: `STN-00${(i % 3) + 1}` },
+        liters_sold: Math.floor(10 + Math.random() * 100) + Math.random(),
+        price_per_liter: [220, 180, 150][i % 3]
     }))
 }
