@@ -51,6 +51,15 @@ const mockUsers: User[] = [
     { user_id: 4, full_name: "Peter Ochieng", username: "peter.attendant", mobile_no: "+254734567890", role_id: 4, is_active: false, created_at: "2024-08-10" },
 ]
 
+// SHA-256 Hash function to match mobile app's password hashing
+async function hashPasswordSHA256(password: string): Promise<string> {
+    const encoder = new TextEncoder()
+    const data = encoder.encode(password)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 // OTP Component
 function OtpVerification({ phone, onVerified, onCancel }: { phone: string; onVerified: () => void; onCancel: () => void }) {
     const [otp, setOtp] = useState("")
@@ -473,21 +482,29 @@ export default function UsersPage() {
         if (selectedUser) {
             // Update
             if (isSupabaseConfigured() && supabase) {
+                // Build update object
+                const updateData: any = {
+                    full_name: userData.full_name,
+                    username: userData.username,
+                    mobile_no: userData.mobile_no,
+                    role_id: userData.role_id,
+                    is_active: userData.is_active,
+                    // Payroll fields
+                    national_id: userData.national_id || null,
+                    monthly_salary: userData.monthly_salary || 0,
+                    bank_name: userData.bank_name || null,
+                    bank_account: userData.bank_account || null,
+                    kra_pin: userData.kra_pin || null,
+                }
+
+                // Only update password if provided (hash it with SHA-256)
+                if (userData.password && userData.password.trim() !== '') {
+                    updateData.password_hash = await hashPasswordSHA256(userData.password)
+                }
+
                 const { error } = await supabase
                     .from("users_new")
-                    .update({
-                        full_name: userData.full_name,
-                        username: userData.username,
-                        mobile_no: userData.mobile_no,
-                        role_id: userData.role_id,
-                        is_active: userData.is_active,
-                        // Payroll fields
-                        national_id: userData.national_id || null,
-                        monthly_salary: userData.monthly_salary || 0,
-                        bank_name: userData.bank_name || null,
-                        bank_account: userData.bank_account || null,
-                        kra_pin: userData.kra_pin || null,
-                    })
+                    .update(updateData)
                     .eq("user_id", selectedUser.user_id)
                 if (error) throw error
             }
@@ -495,12 +512,15 @@ export default function UsersPage() {
         } else {
             // Create
             if (isSupabaseConfigured() && supabase) {
+                // Hash password with SHA-256 to match mobile app
+                const hashedPassword = await hashPasswordSHA256(userData.password)
+
                 const { error } = await supabase
                     .from("users_new")
                     .insert({
                         full_name: userData.full_name,
                         username: userData.username,
-                        password_hash: userData.password, // Should be hashed in production
+                        password_hash: hashedPassword, // SHA-256 hashed to match mobile app
                         mobile_no: userData.mobile_no,
                         role_id: userData.role_id,
                         is_active: userData.is_active,

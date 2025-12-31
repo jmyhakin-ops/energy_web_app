@@ -419,61 +419,90 @@ export default function LoginPage() {
                 </div>
             </div>
 
-            {/* Right Side - Visual */}
-            <div className="hidden lg:flex flex-1 bg-gradient-to-br from-blue-600 via-blue-700 to-cyan-600 relative overflow-hidden">
+            {/* Right Side - Modern Dark Professional Design */}
+            <div className="hidden lg:flex flex-1 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a3e 25%, #12122a 50%, #1e1e4a 75%, #0f0f23 100%)' }}>
+                {/* Animated Background Elements */}
                 <div className="absolute inset-0">
-                    <div className="absolute top-20 left-20 w-80 h-80 bg-white/10 rounded-full blur-3xl" />
-                    <div className="absolute bottom-20 right-20 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl" />
+                    <div className="absolute top-20 left-20 w-96 h-96 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-full blur-3xl animate-pulse" />
+                    <div className="absolute bottom-20 right-20 w-80 h-80 bg-gradient-to-r from-cyan-500/10 to-emerald-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-r from-indigo-500/5 to-purple-500/5 rounded-full blur-3xl" />
+                    {/* Grid Pattern */}
+                    <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.15) 1px, transparent 0)', backgroundSize: '40px 40px' }} />
                 </div>
 
-                <div className="relative z-10 flex flex-col items-center justify-center p-16 text-white w-full">
-                    <div className="w-24 h-24 rounded-3xl bg-white/10 backdrop-blur-xl flex items-center justify-center mb-10 shadow-2xl">
-                        {step === "credentials" ? (
-                            <Fuel className="w-12 h-12" />
-                        ) : (
-                            <Shield className="w-12 h-12" />
-                        )}
+                <div className="relative z-10 flex flex-col items-center justify-center p-16 w-full">
+                    {/* Logo Icon */}
+                    <div className="relative mb-10">
+                        <div className="w-28 h-28 rounded-3xl bg-gradient-to-br from-purple-500/20 via-indigo-500/20 to-cyan-500/20 backdrop-blur-2xl flex items-center justify-center shadow-2xl border border-white/10">
+                            {step === "credentials" ? (
+                                <Fuel className="w-14 h-14 text-white/90" />
+                            ) : (
+                                <Shield className="w-14 h-14 text-emerald-400" />
+                            )}
+                        </div>
+                        <div className="absolute -inset-2 bg-gradient-to-r from-purple-500/30 via-indigo-500/30 to-cyan-500/30 rounded-3xl blur-xl -z-10" />
                     </div>
 
-                    <h2 className="text-4xl font-extrabold text-center mb-6">
+                    {/* Title */}
+                    <h2 className="text-5xl font-extrabold text-center mb-4 leading-tight" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
                         {step === "credentials" ? (
                             <>
-                                Alpha Energy App
+                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-white via-purple-200 to-white">Alpha Energy</span>
                                 <br />
-                                <span className="text-cyan-300">Fuel Station Management</span>
+                                <span className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400">Fuel Station Management</span>
                             </>
                         ) : (
                             <>
-                                Two-Factor
+                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-emerald-300 to-cyan-300">Two-Factor</span>
                                 <br />
-                                <span className="text-cyan-300">Authentication</span>
+                                <span className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-teal-400">Authentication</span>
                             </>
                         )}
                     </h2>
 
-                    <p className="text-xl text-blue-100 text-center max-w-md mb-12">
+                    {/* Subtitle */}
+                    <p className="text-lg text-gray-400 text-center max-w-md mb-10 leading-relaxed" style={{ fontFamily: "'Inter', sans-serif" }}>
                         {step === "credentials"
-                            ? "Secure login with SMS verification via Africa's Talking."
+                            ? "Secure login with SMS verification powered by Africa's Talking."
                             : "Enter the code sent to your phone to complete login."
                         }
                     </p>
 
-                    <div className="flex flex-wrap justify-center gap-4 mb-12">
+                    {/* Feature Pills */}
+                    <div className="flex flex-wrap justify-center gap-3 mb-12">
                         {[
-                            { icon: Building2, label: "Multi-Station" },
-                            { icon: BarChart3, label: "Analytics" },
-                            { icon: Smartphone, label: "M-Pesa" },
+                            { icon: Building2, label: "Multi-Station", color: "from-blue-500/20 to-indigo-500/20" },
+                            { icon: BarChart3, label: "Analytics", color: "from-purple-500/20 to-pink-500/20" },
+                            { icon: Smartphone, label: "M-Pesa", color: "from-emerald-500/20 to-cyan-500/20" },
                         ].map((item) => (
-                            <div key={item.label} className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur rounded-full">
-                                <item.icon className="w-4 h-4" />
-                                <span className="text-sm font-medium">{item.label}</span>
+                            <div key={item.label} className={`flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r ${item.color} backdrop-blur-xl rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 hover:scale-105`}>
+                                <item.icon className="w-4 h-4 text-white/80" />
+                                <span className="text-sm font-semibold text-white/90" style={{ fontFamily: "'Inter', sans-serif" }}>{item.label}</span>
                             </div>
                         ))}
                     </div>
 
-                    <div className="text-center text-blue-200 text-sm">
-                        <p>Developed by <span className="font-bold text-white">Jimhawkins Korir</span></p>
-                        <p className="mt-1">📞 +254720316175</p>
+                    {/* Decorative Line */}
+                    <div className="w-32 h-1 bg-gradient-to-r from-transparent via-purple-500/50 to-transparent rounded-full mb-10" />
+
+                    {/* Developer Info */}
+                    <div className="text-center">
+                        <p className="text-gray-500 text-sm mb-1" style={{ fontFamily: "'Inter', sans-serif" }}>
+                            Developed by
+                        </p>
+                        <p className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300" style={{ fontFamily: "'Inter', sans-serif" }}>
+                            Jimhawkins Korir
+                        </p>
+                        <p className="text-gray-500 text-sm mt-1 flex items-center justify-center gap-1">
+                            📞 <span className="text-gray-400">+254720316175</span>
+                        </p>
+                    </div>
+
+                    {/* Version Badge */}
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+                        <div className="px-4 py-2 bg-white/5 backdrop-blur rounded-full border border-white/10">
+                            <span className="text-xs text-gray-500" style={{ fontFamily: "'Inter', sans-serif" }}>Version 3.6 • Enterprise Edition</span>
+                        </div>
                     </div>
                 </div>
             </div>
