@@ -542,9 +542,9 @@ export default function SalesPage() {
     const [searchQuery, setSearchQuery] = useState("")
     const [showAddModal, setShowAddModal] = useState(false)
 
-    // Pagination - 7 per page for better visibility
+    // Pagination with configurable page size
     const [currentPage, setCurrentPage] = useState(1)
-    const pageSize = 7
+    const [pageSize, setPageSize] = useState(10)
 
     // Filters
     const [selectedStation, setSelectedStation] = useState<number | null>(null)
@@ -967,164 +967,181 @@ export default function SalesPage() {
                     </div>
                 </div>
 
-                {/* Stats - 5 cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                    <Card>
-                        <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-                                    <Wallet className="w-6 h-6 text-blue-600" />
-                                </div>
-                                <div>
-                                    <p className="text-lg font-bold text-gray-900">{formatCurrency(stats.total)}</p>
-                                    <p className="text-xs text-gray-500">Total Sales</p>
+                {/* Stats Cards - Beautiful Gradient Design */}
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                    {/* Total Sales */}
+                    <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                        <div className="relative z-10">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                    <Wallet className="w-6 h-6 text-white" />
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
-                                    <Clock className="w-6 h-6 text-purple-600" />
-                                </div>
-                                <div>
-                                    <p className="text-lg font-bold text-gray-900">{stats.count}</p>
-                                    <p className="text-xs text-gray-500">Transactions</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-xl bg-cyan-100 flex items-center justify-center">
-                                    <Droplets className="w-6 h-6 text-cyan-600" />
-                                </div>
-                                <div>
-                                    <p className="text-lg font-bold text-gray-900">{stats.totalLiters.toFixed(2)} L</p>
-                                    <p className="text-xs text-gray-500">Total Liters</p>
+                            <p className="text-white/80 text-sm font-medium mb-1">Total Sales</p>
+                            <p className="text-2xl sm:text-3xl font-bold text-white">{formatCurrency(stats.total)}</p>
+                            <p className="text-white/70 text-xs mt-1">{stats.count} transactions</p>
+                        </div>
+                    </div>
+
+                    {/* Transactions Count */}
+                    <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-600 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                        <div className="relative z-10">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                    <Clock className="w-6 h-6 text-white" />
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-                                    <span className="text-xl">📱</span>
-                                </div>
-                                <div>
-                                    <p className="text-lg font-bold text-gray-900">{formatCurrency(stats.mpesa)}</p>
-                                    <p className="text-xs text-gray-500">M-Pesa</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
-                                    <span className="text-xl">💵</span>
-                                </div>
-                                <div>
-                                    <p className="text-lg font-bold text-gray-900">{formatCurrency(stats.cash)}</p>
-                                    <p className="text-xs text-gray-500">Cash</p>
+                            <p className="text-white/80 text-sm font-medium mb-1">Transactions</p>
+                            <p className="text-2xl sm:text-3xl font-bold text-white">{stats.count}</p>
+                            <p className="text-white/70 text-xs mt-1">Total records</p>
+                        </div>
+                    </div>
+
+                    {/* Total Liters */}
+                    <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                        <div className="relative z-10">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                    <Droplets className="w-6 h-6 text-white" />
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
+                            <p className="text-white/80 text-sm font-medium mb-1">⛽ Total Liters</p>
+                            <p className="text-2xl sm:text-3xl font-bold text-white">{stats.totalLiters.toFixed(2)} L</p>
+                            <p className="text-white/70 text-xs mt-1">Fuel sold</p>
+                        </div>
+                    </div>
+
+                    {/* M-Pesa */}
+                    <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-emerald-500 via-green-500 to-teal-600 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                        <div className="relative z-10">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                    <span className="text-2xl">📱</span>
+                                </div>
+                            </div>
+                            <p className="text-white/80 text-sm font-medium mb-1">M-Pesa</p>
+                            <p className="text-2xl sm:text-3xl font-bold text-white">{formatCurrency(stats.mpesa)}</p>
+                            <p className="text-white/70 text-xs mt-1">Mobile payments</p>
+                        </div>
+                    </div>
+
+                    {/* Cash */}
+                    <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                        <div className="relative z-10">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                    <span className="text-2xl">💵</span>
+                                </div>
+                            </div>
+                            <p className="text-white/80 text-sm font-medium mb-1">Cash</p>
+                            <p className="text-2xl sm:text-3xl font-bold text-white">{formatCurrency(stats.cash)}</p>
+                            <p className="text-white/70 text-xs mt-1">Cash payments</p>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Complete Filters */}
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                                <Filter className="w-4 h-4 text-blue-600" /> Filters
-                            </h3>
-                            <button onClick={clearFilters} className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1">
+                {/* Filters - Beautiful Design */}
+                <Card className="overflow-hidden border-0 shadow-lg">
+                    <div className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 p-4 border-b">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                                    <Filter className="w-4 h-4 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="font-semibold text-gray-800">🎯 Filters</h3>
+                                    <p className="text-xs text-gray-500">Filter sales by date, station, attendant</p>
+                                </div>
+                            </div>
+                            <button onClick={clearFilters} className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 px-3 py-1.5 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
                                 <X className="w-3 h-3" /> Clear All
                             </button>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                    </div>
+                    <CardContent className="p-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
                             {/* From Date */}
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">📅 From Date</label>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-semibold text-gray-500 flex items-center gap-1">📅 From</label>
                                 <input
                                     type="date"
                                     value={dateFrom}
                                     onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1) }}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                    className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                                 />
                             </div>
                             {/* To Date */}
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">📅 To Date</label>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-semibold text-gray-500 flex items-center gap-1">📅 To</label>
                                 <input
                                     type="date"
                                     value={dateTo}
                                     onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1) }}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                    className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                                 />
                             </div>
                             {/* Station Filter */}
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">🏢 Station</label>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-semibold text-gray-500 flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Station</label>
                                 <select
                                     value={selectedStation || ""}
                                     onChange={(e) => { setSelectedStation(e.target.value ? Number(e.target.value) : null); setCurrentPage(1) }}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                    className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none cursor-pointer"
                                 >
-                                    <option value="">All</option>
+                                    <option value="">All Stations</option>
                                     {stations.map(s => <option key={s.station_id} value={s.station_id}>{s.station_name}</option>)}
                                 </select>
                             </div>
                             {/* Pump Filter */}
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">⛽ Pump</label>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-semibold text-gray-500 flex items-center gap-1"><Fuel className="w-3.5 h-3.5" /> Pump</label>
                                 <select
                                     value={selectedPump || ""}
                                     onChange={(e) => { setSelectedPump(e.target.value ? Number(e.target.value) : null); setCurrentPage(1) }}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                    className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none cursor-pointer"
                                 >
-                                    <option value="">All</option>
+                                    <option value="">All Pumps</option>
                                     {pumps.filter(p => !selectedStation || p.station_id === selectedStation).map(p => <option key={p.pump_id} value={p.pump_id}>{p.pump_name}</option>)}
                                 </select>
                             </div>
                             {/* User Filter */}
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">👤 Attendant</label>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-semibold text-gray-500 flex items-center gap-1">👤 Attendant</label>
                                 <select
                                     value={selectedUser || ""}
                                     onChange={(e) => { setSelectedUser(e.target.value ? Number(e.target.value) : null); setCurrentPage(1) }}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                    className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none cursor-pointer"
                                 >
-                                    <option value="">All</option>
+                                    <option value="">All Users</option>
                                     {users.map(u => <option key={u.user_id} value={u.user_id}>{u.full_name}</option>)}
                                 </select>
                             </div>
                             {/* Shift Filter */}
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">🕐 Shift</label>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-semibold text-gray-500 flex items-center gap-1">🕐 Shift</label>
                                 <select
                                     value={selectedShift || ""}
                                     onChange={(e) => { setSelectedShift(e.target.value ? Number(e.target.value) : null); setCurrentPage(1) }}
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                    className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none cursor-pointer"
                                 >
-                                    <option value="">All</option>
+                                    <option value="">All Shifts</option>
                                     {shifts.map(s => <option key={s.shift_id} value={s.shift_id}>{s.shift_name}</option>)}
                                 </select>
                             </div>
                             {/* Search */}
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">🔍 Search</label>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-semibold text-gray-500 flex items-center gap-1">🔍 Search</label>
                                 <input
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1) }}
                                     placeholder="Receipt, M-Pesa..."
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-blue-500 outline-none text-sm"
+                                    className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                                 />
                             </div>
                         </div>
@@ -1136,13 +1153,13 @@ export default function SalesPage() {
                             <div className="flex gap-2">
                                 <button
                                     onClick={clearFilters}
-                                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-1"
+                                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 flex items-center gap-1 transition-colors"
                                 >
                                     <X className="w-4 h-4" /> Clear Filters
                                 </button>
                                 <button
                                     onClick={fetchData}
-                                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-1"
+                                    className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:from-blue-700 hover:to-indigo-700 flex items-center gap-1 shadow-lg transition-all"
                                 >
                                     <RefreshCw className="w-4 h-4" /> Apply & Refresh
                                 </button>
@@ -1151,44 +1168,62 @@ export default function SalesPage() {
                     </CardContent>
                 </Card>
 
-                {/* Sales List */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>
-                            <Wallet className="w-5 h-5 text-green-600" />
-                            📋 Transactions ({filteredSales.length} total)
-                        </CardTitle>
+                {/* Sales List - Beautiful Table */}
+                <Card className="overflow-hidden border-0 shadow-lg">
+                    <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 pb-3">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                                    <Wallet className="w-4 h-4 text-white" />
+                                </div>
+                                📊 Transactions
+                                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">{filteredSales.length} records</span>
+                            </CardTitle>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500">Show:</span>
+                                <select
+                                    value={pageSize}
+                                    onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
+                                    className="px-2 py-1 border border-gray-200 rounded-lg text-xs outline-none"
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
+                            </div>
+                        </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="p-0">
                         {loading ? (
-                            <div className="flex items-center justify-center py-12">
-                                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                            <div className="flex items-center justify-center py-20">
+                                <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
                             </div>
                         ) : filteredSales.length === 0 ? (
-                            <div className="text-center py-12 text-gray-500">
-                                <Wallet className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                                <p>{sales.length === 0 ? "No sales found. Record your first sale!" : "No sales match your filter"}</p>
+                            <div className="flex flex-col items-center justify-center py-20">
+                                <Wallet className="w-16 h-16 text-gray-300 mb-4" />
+                                <p className="text-gray-500 font-medium">{sales.length === 0 ? "No sales found. Record your first sale!" : "No sales match your filter"}</p>
                             </div>
                         ) : (
                             <>
                                 <div className="overflow-x-auto">
                                     <table className="w-full min-w-[1300px]">
                                         <thead>
-                                            <tr className="border-b border-gray-200 bg-gray-50">
-                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Receipt No</th>
-                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Station</th>
-                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Pump</th>
-                                                <th className="text-right py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Liters</th>
-                                                <th className="text-right py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Amount</th>
-                                                <th className="text-center py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Payment</th>
-                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Phone No</th>
-                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">M-Pesa Code</th>
-                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Attendant</th>
-                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Shift</th>
-                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Date/Time</th>
+                                            <tr className="bg-gradient-to-r from-gray-50 to-slate-50 border-b border-gray-200">
+                                                <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">🧾 Receipt No</th>
+                                                <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">🏢 Station</th>
+                                                <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">⛽ Pump</th>
+                                                <th className="text-right py-4 px-3 text-xs font-bold text-gray-600 uppercase">🛢️ Liters</th>
+                                                <th className="text-right py-4 px-3 text-xs font-bold text-gray-600 uppercase">💰 Amount</th>
+                                                <th className="text-center py-4 px-3 text-xs font-bold text-gray-600 uppercase">✅ Payment</th>
+                                                <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">📱 Phone No</th>
+                                                <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">🔗 M-Pesa Code</th>
+                                                <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">👤 Attendant</th>
+                                                <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">🕐 Shift</th>
+                                                <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">📅 Date/Time</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody className="divide-y divide-gray-100">
                                             {paginatedSales.map((sale) => {
                                                 // Lookup names from loaded arrays
                                                 const stationName = stations.find(s => s.station_id === sale.station_id)?.station_name || '—'
@@ -1286,29 +1321,30 @@ export default function SalesPage() {
                                     </table>
                                 </div>
 
-                                {/* Pagination Footer */}
-                                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-200">
-                                    <div className="text-sm text-gray-500">
-                                        Showing <span className="font-semibold">{(currentPage - 1) * pageSize + 1}</span> to <span className="font-semibold">{Math.min(currentPage * pageSize, filteredSales.length)}</span> of <span className="font-semibold">{filteredSales.length}</span> transactions
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                            disabled={currentPage === 1}
-                                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            ← Previous
-                                        </button>
-                                        <span className="px-4 py-2 text-sm font-medium text-gray-900 bg-blue-50 border border-blue-200 rounded-lg">
-                                            Page {currentPage} of {totalPages || 1}
-                                        </span>
-                                        <button
-                                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                            disabled={currentPage >= totalPages}
-                                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            Next →
-                                        </button>
+                                {/* Beautiful Pagination Footer */}
+                                <div className="bg-gradient-to-r from-slate-50 via-gray-50 to-slate-50 border-t border-gray-200 px-4 py-4">
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <span className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-lg flex items-center justify-center text-xs font-bold">{filteredSales.length}</span>
+                                            <span className="text-sm text-gray-600">Total Records</span>
+                                            <div className="h-6 w-px bg-gray-300" />
+                                            <span className="text-sm text-gray-500">Showing <span className="font-semibold text-gray-700">{(currentPage - 1) * pageSize + 1}</span> to <span className="font-semibold text-gray-700">{Math.min(currentPage * pageSize, filteredSales.length)}</span></span>
+                                        </div>
+                                        <span className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg">Page {currentPage} of {totalPages || 1}</span>
+                                        <div className="flex items-center gap-1">
+                                            <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                <span className="text-gray-600 text-xs">⟪</span>
+                                            </button>
+                                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 text-sm font-medium text-gray-600">
+                                                ← Prev
+                                            </button>
+                                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages} className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 text-sm font-medium text-gray-600">
+                                                Next →
+                                            </button>
+                                            <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage >= totalPages} className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                <span className="text-gray-600 text-xs">⟫</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </>
