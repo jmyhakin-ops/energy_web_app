@@ -1264,55 +1264,93 @@ export default function SalesPage() {
                                                 const badge = getPaymentBadge()
 
                                                 return (
-                                                    <tr key={sale.sale_id} className={`border-b border-gray-100 hover:bg-blue-50 transition-colors ${(isMpesaCancelled || isMpesaFailed) ? 'bg-red-50/30' : ''}`}>
-                                                        <td className="py-3 px-3">
-                                                            <span className="font-mono text-sm font-medium text-blue-600">{sale.sale_id_no || `RCP-${String(sale.sale_id).padStart(5, '0')}`}</span>
+                                                    <tr key={sale.sale_id} className={`hover:bg-blue-50/50 transition-colors group ${(isMpesaCancelled || isMpesaFailed) ? 'bg-red-50/30' : ''}`}>
+                                                        {/* Receipt No */}
+                                                        <td className="py-4 px-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                                                                    <span className="text-xs font-bold text-blue-600">🧾</span>
+                                                                </div>
+                                                                <span className="font-mono text-sm font-bold text-blue-600">{sale.sale_id_no || `RCP-${String(sale.sale_id).padStart(5, '0')}`}</span>
+                                                            </div>
                                                         </td>
-                                                        <td className="py-3 px-3">
-                                                            <span className="text-sm font-medium text-gray-900">{stationName}</span>
+                                                        {/* Station */}
+                                                        <td className="py-4 px-3">
+                                                            <div>
+                                                                <p className="font-medium text-gray-900 text-sm">{stationName}</p>
+                                                            </div>
                                                         </td>
-                                                        <td className="py-3 px-3">
-                                                            <span className="text-sm text-gray-600">{pumpName}</span>
-                                                        </td>
-                                                        <td className="py-3 px-3 text-right">
-                                                            <span className={`text-sm font-medium ${(isMpesaCancelled || isMpesaFailed) ? 'text-gray-400 line-through' : 'text-blue-600'}`}>
-                                                                {(isMpesaSuccess || isCash) ? `${calculatedLiters.toFixed(2)} L` : '—'}
+                                                        {/* Pump */}
+                                                        <td className="py-4 px-3">
+                                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-700">
+                                                                ⛽ {pumpName}
                                                             </span>
                                                         </td>
-                                                        <td className="py-3 px-3 text-right">
-                                                            <span className={`font-bold ${(isMpesaCancelled || isMpesaFailed) ? 'text-gray-400 line-through' : 'text-green-600'}`}>
+                                                        {/* Liters */}
+                                                        <td className="py-4 px-3 text-right">
+                                                            {(isMpesaSuccess || isCash) ? (
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    <Droplets className="w-3.5 h-3.5 text-cyan-600" />
+                                                                    <span className="font-semibold text-cyan-700">{calculatedLiters.toFixed(2)} L</span>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-gray-400 line-through">{calculatedLiters.toFixed(2)} L</span>
+                                                            )}
+                                                        </td>
+                                                        {/* Amount */}
+                                                        <td className="py-4 px-3 text-right">
+                                                            <span className={`font-bold text-lg ${(isMpesaCancelled || isMpesaFailed) ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                                                                 {formatCurrency(sale.amount || sale.total_amount || 0)}
                                                             </span>
                                                         </td>
-                                                        <td className="py-3 px-3 text-center">
-                                                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${badge.color}`}>
+                                                        {/* Payment Status */}
+                                                        <td className="py-4 px-3 text-center">
+                                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${badge.color}`}>
                                                                 {badge.text}
                                                             </span>
                                                         </td>
-                                                        <td className="py-3 px-3">
+                                                        {/* Phone Number */}
+                                                        <td className="py-4 px-3">
                                                             {isMpesaAny && phoneNumber !== '—' ? (
-                                                                <span className="text-sm text-gray-700 font-mono">{phoneNumber}</span>
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center">
+                                                                        <span className="text-sm">📱</span>
+                                                                    </div>
+                                                                    <span className="font-mono font-medium text-gray-900 text-sm">{phoneNumber}</span>
+                                                                </div>
                                                             ) : (
-                                                                <span className="text-sm text-gray-400">—</span>
+                                                                <span className="text-gray-400 text-sm">—</span>
                                                             )}
                                                         </td>
-                                                        <td className="py-3 px-3">
+                                                        {/* M-Pesa Code */}
+                                                        <td className="py-4 px-3">
                                                             {isMpesaSuccess && mpesaCode !== '—' ? (
-                                                                <span className="text-xs font-mono text-green-600 bg-green-50 px-2 py-1 rounded">{mpesaCode}</span>
-                                                            ) : isMpesaAny && phoneNumber !== '—' ? (
-                                                                <span className="text-xs font-mono text-gray-500">—</span>
+                                                                <span className="font-mono text-sm text-gray-700 bg-green-100 px-2 py-1 rounded-lg">{mpesaCode}</span>
                                                             ) : (
-                                                                <span className="text-sm text-gray-400">—</span>
+                                                                <span className="text-gray-400 text-sm">—</span>
                                                             )}
                                                         </td>
-                                                        <td className="py-3 px-3">
-                                                            <span className="text-sm text-gray-700">{attendantName}</span>
+                                                        {/* Attendant */}
+                                                        <td className="py-4 px-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                                                                    {attendantName.charAt(0).toUpperCase()}
+                                                                </div>
+                                                                <span className="font-medium text-gray-900 text-sm">{attendantName}</span>
+                                                            </div>
                                                         </td>
-                                                        <td className="py-3 px-3">
-                                                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-indigo-50 text-indigo-700">{shiftName}</span>
+                                                        {/* Shift */}
+                                                        <td className="py-4 px-3">
+                                                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-100 text-indigo-700">
+                                                                🕐 {shiftName}
+                                                            </span>
                                                         </td>
-                                                        <td className="py-3 px-3">
-                                                            <span className="text-xs text-gray-500">{formatDateTime(sale.created_at)}</span>
+                                                        {/* Date/Time */}
+                                                        <td className="py-4 px-3">
+                                                            <div>
+                                                                <p className="font-medium text-gray-900 text-sm">{new Date(sale.created_at).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                                                <p className="text-xs text-gray-500">{new Date(sale.created_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 )
