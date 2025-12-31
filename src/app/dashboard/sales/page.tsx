@@ -1,5 +1,7 @@
 "use client"
 
+// Sales & Transactions Page v2.1.0 - Fixed payment classification bug (Dec 31, 2025)
+
 import { useState, useEffect } from "react"
 import {
     Wallet, Download, CheckCircle, XCircle, Clock, Loader2, RefreshCw,
@@ -670,14 +672,76 @@ export default function SalesPage() {
         setCurrentPage(1)
     }
 
+    // Helper function to calculate liters for a sale
+    const calculateSaleLiters = (sale: Sale): number => {
+        // First try liters_sold from DB
+        if (sale.liters_sold && sale.liters_sold > 0) {
+            return sale.liters_sold
+        }
+        // Calculate from amount and price
+        const saleAmount = sale.amount || sale.total_amount || 0
+        let pricePerLiter = sale.price_per_liter || 0
+        if (pricePerLiter === 0 && sale.fuel_type_id) {
+            const fuelType = fuelTypes.find(f => f.fuel_type_id === sale.fuel_type_id)
+            pricePerLiter = fuelType?.price_per_liter || 0
+        }
+        // Default price if still not found
+        if (pricePerLiter === 0 && fuelTypes.length > 0) {
+            pricePerLiter = fuelTypes[0].price_per_liter || 185
+        }
+        return pricePerLiter > 0 ? saleAmount / pricePerLiter : 0
+    }
+
+    // Helper function to classify payment type properly
+    // M-Pesa transaction can have status: SUCCESS, PENDING, CANCELLED, FAILED, TIMEOUT, etc.
+    // Cash transactions have: payment_method === 'cash' OR transaction_status === 'CASH'
+    const getPaymentType = (sale: Sale): 'mpesa_success' | 'mpesa_failed' | 'mpesa_cancelled' | 'mpesa_pending' | 'cash' | 'unknown' => {
+        const status = sale.transaction_status?.toUpperCase() || ''
+        const method = sale.payment_method?.toLowerCase() || ''
+
+        // Check for actual Cash payments first
+        if (method === 'cash' || status === 'CASH') {
+            return 'cash'
+        }
+
+        // Check for M-Pesa transactions (by payment method or various statuses)
+        if (method === 'mpesa' || status === 'SUCCESS' || status === 'PENDING' ||
+            status === 'CANCELLED' || status === 'FAILED' || status === 'TIMEOUT' ||
+            status === 'INSUFFICIENT_FUNDS' || sale.checkout_request_id || sale.mpesa_receipt_number) {
+            if (status === 'SUCCESS') return 'mpesa_success'
+            if (status === 'CANCELLED') return 'mpesa_cancelled'
+            if (status === 'FAILED' || status === 'TIMEOUT' || status === 'INSUFFICIENT_FUNDS') return 'mpesa_failed'
+            if (status === 'PENDING') return 'mpesa_pending'
+            // Default to success if has receipt number
+            if (sale.mpesa_receipt_number) return 'mpesa_success'
+            return 'mpesa_pending'
+        }
+
+        return 'unknown'
+    }
+
     // Stats - MUST use filteredSales to reflect current filters!
-    // Also check transaction_status for mobile app compatibility
+    // Only count SUCCESSFUL transactions for totals
     const stats = {
-        total: filteredSales.reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
+        total: filteredSales
+            .filter(s => {
+                const type = getPaymentType(s)
+                return type === 'mpesa_success' || type === 'cash'
+            })
+            .reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
         count: filteredSales.length,
-        mpesa: filteredSales.filter(s => s.payment_method === "mpesa" || s.transaction_status === "SUCCESS").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
-        cash: filteredSales.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
-        totalLiters: filteredSales.reduce((acc, s) => acc + (s.liters_sold || 0), 0),
+        mpesa: filteredSales
+            .filter(s => getPaymentType(s) === 'mpesa_success')
+            .reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
+        cash: filteredSales
+            .filter(s => getPaymentType(s) === 'cash')
+            .reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
+        totalLiters: filteredSales
+            .filter(s => {
+                const type = getPaymentType(s)
+                return type === 'mpesa_success' || type === 'cash'
+            })
+            .reduce((acc, s) => acc + calculateSaleLiters(s), 0),
     }
 
     // Export to Excel with professional formatting
@@ -696,7 +760,7 @@ export default function SalesPage() {
         const filteredTotal = filteredSales.reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0)
         const filteredMpesa = filteredSales.filter(s => s.payment_method === "mpesa" || s.transaction_status === "SUCCESS").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0)
         const filteredCash = filteredSales.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0)
-        const filteredLiters = filteredSales.reduce((acc, s) => acc + (s.liters_sold || 0), 0)
+        const filteredLiters = filteredSales.reduce((acc, s) => acc + calculateSaleLiters(s), 0)
 
         // Create beautiful HTML Excel file
         let html = `
@@ -770,16 +834,17 @@ export default function SalesPage() {
 <table>
 <thead>
 <tr>
-    <th style="width:12%">Receipt No</th>
-    <th style="width:12%">Station</th>
-    <th style="width:10%">Pump</th>
+    <th style="width:10%">Receipt No</th>
+    <th style="width:10%">Station</th>
+    <th style="width:8%">Pump</th>
     <th style="width:8%">Shift</th>
-    <th style="width:8%; text-align:right">Liters</th>
-    <th style="width:10%; text-align:right">Amount</th>
-    <th style="width:10%">Payment</th>
-    <th style="width:12%">M-Pesa Receipt</th>
-    <th style="width:10%">Attendant</th>
-    <th style="width:12%">Date/Time</th>
+    <th style="width:7%; text-align:right">Liters</th>
+    <th style="width:9%; text-align:right">Amount</th>
+    <th style="width:9%">Payment</th>
+    <th style="width:10%">Phone No</th>
+    <th style="width:11%">M-Pesa Code</th>
+    <th style="width:9%">Attendant</th>
+    <th style="width:11%">Date/Time</th>
 </tr>
 </thead>
 <tbody>
@@ -791,23 +856,50 @@ export default function SalesPage() {
             const attendantName = users.find(u => u.user_id === sale.attendant_id)?.full_name || '—'
             const pumpShift = pumpShifts.find(ps => ps.pump_shift_id === sale.pump_shift_id)
             const shiftName = pumpShift ? shifts.find(s => s.shift_id === pumpShift.shift_id)?.shift_name || '—' : '—'
-            const isMpesa = sale.payment_method === "mpesa" || sale.transaction_status === "SUCCESS"
-            const isCash = sale.payment_method === "cash" || sale.transaction_status === "CASH"
-            const paymentBadge = isMpesa
-                ? '<span class="mpesa-badge">📱 M-PESA</span>'
-                : isCash
-                    ? '<span class="cash-badge">💵 CASH</span>'
-                    : sale.transaction_status || '—'
 
-            html += `<tr>
+            // Use proper payment type classification
+            const paymentType = getPaymentType(sale)
+            const isMpesaSuccess = paymentType === 'mpesa_success'
+            const isMpesaCancelled = paymentType === 'mpesa_cancelled'
+            const isMpesaFailed = paymentType === 'mpesa_failed'
+            const isMpesaPending = paymentType === 'mpesa_pending'
+            const isMpesaAny = isMpesaSuccess || isMpesaCancelled || isMpesaFailed || isMpesaPending
+            const isCash = paymentType === 'cash'
+
+            // Get payment badge
+            let paymentBadge = '—'
+            if (isMpesaSuccess) paymentBadge = '<span class="mpesa-badge">📱 M-PESA</span>'
+            else if (isMpesaCancelled) paymentBadge = '<span style="background:#fee2e2; color:#dc2626; padding:3px 8px; border-radius:12px; font-size:10px;">❌ CANCELLED</span>'
+            else if (isMpesaFailed) paymentBadge = '<span style="background:#ffedd5; color:#ea580c; padding:3px 8px; border-radius:12px; font-size:10px;">⚠️ FAILED</span>'
+            else if (isMpesaPending) paymentBadge = '<span style="background:#fef9c3; color:#ca8a04; padding:3px 8px; border-radius:12px; font-size:10px;">⏳ PENDING</span>'
+            else if (isCash) paymentBadge = '<span class="cash-badge">💵 CASH</span>'
+            else paymentBadge = sale.transaction_status || '—'
+
+            // Calculate liters dynamically (only for successful transactions)
+            const saleLiters = (isMpesaSuccess || isCash) ? calculateSaleLiters(sale) : 0
+
+            // Get phone number
+            const phoneNumber = sale.customer_mobile_no && sale.customer_mobile_no !== 'CASH'
+                ? sale.customer_mobile_no
+                : '—'
+
+            // Get M-Pesa code
+            const mpesaCode = sale.mpesa_receipt_number || sale.mpesa_transaction_id || '—'
+
+            // Style for failed/cancelled rows
+            const rowStyle = (isMpesaCancelled || isMpesaFailed) ? 'style="background:#fef2f2;"' : ''
+            const strikeStyle = (isMpesaCancelled || isMpesaFailed) ? 'style="text-decoration:line-through; color:#9ca3af;"' : ''
+
+            html += `<tr ${rowStyle}>
     <td class="receipt">${sale.sale_id_no || `RCP-${String(sale.sale_id).padStart(5, '0')}`}</td>
     <td>${stationName}</td>
     <td>${pumpName}</td>
     <td>${shiftName}</td>
-    <td style="text-align:right">${sale.liters_sold?.toFixed(2) || '0.00'} L</td>
-    <td class="amount">KES ${(sale.amount || sale.total_amount || 0).toLocaleString()}</td>
+    <td style="text-align:right" ${strikeStyle}>${(isMpesaSuccess || isCash) ? saleLiters.toFixed(2) + ' L' : '—'}</td>
+    <td class="amount" ${strikeStyle}>KES ${(sale.amount || sale.total_amount || 0).toLocaleString()}</td>
     <td>${paymentBadge}</td>
-    <td style="font-family:monospace; font-size:10px; color:#64748b;">${sale.mpesa_receipt_number || '—'}</td>
+    <td style="font-family:monospace; font-size:10px;">${isMpesaAny ? phoneNumber : '—'}</td>
+    <td style="font-family:monospace; font-size:10px; color:#166534;">${isMpesaSuccess ? mpesaCode : '—'}</td>
     <td>${attendantName}</td>
     <td style="font-size:11px; color:#64748b;">${sale.created_at ? new Date(sale.created_at).toLocaleString() : '—'}</td>
 </tr>`
@@ -1074,7 +1166,7 @@ export default function SalesPage() {
                         ) : (
                             <>
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[1000px]">
+                                    <table className="w-full min-w-[1300px]">
                                         <thead>
                                             <tr className="border-b border-gray-200 bg-gray-50">
                                                 <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Receipt No</th>
@@ -1083,6 +1175,8 @@ export default function SalesPage() {
                                                 <th className="text-right py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Liters</th>
                                                 <th className="text-right py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Amount</th>
                                                 <th className="text-center py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Payment</th>
+                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Phone No</th>
+                                                <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">M-Pesa Code</th>
                                                 <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Attendant</th>
                                                 <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Shift</th>
                                                 <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase">Date/Time</th>
@@ -1096,35 +1190,78 @@ export default function SalesPage() {
                                                 const attendantName = users.find(u => u.user_id === sale.attendant_id)?.full_name || '—'
                                                 const pumpShift = pumpShifts.find(ps => ps.pump_shift_id === sale.pump_shift_id)
                                                 const shiftName = pumpShift ? shifts.find(s => s.shift_id === pumpShift.shift_id)?.shift_name || '—' : '—'
-                                                const isMpesa = sale.payment_method === "mpesa" || sale.transaction_status === "SUCCESS"
-                                                const isCash = sale.payment_method === "cash" || sale.transaction_status === "CASH"
+                                                // Get payment type using helper
+                                                const paymentType = getPaymentType(sale)
+                                                const isMpesaSuccess = paymentType === 'mpesa_success'
+                                                const isMpesaCancelled = paymentType === 'mpesa_cancelled'
+                                                const isMpesaFailed = paymentType === 'mpesa_failed'
+                                                const isMpesaPending = paymentType === 'mpesa_pending'
+                                                const isMpesaAny = isMpesaSuccess || isMpesaCancelled || isMpesaFailed || isMpesaPending
+                                                const isCash = paymentType === 'cash'
+
+                                                // Calculate liters dynamically using helper function
+                                                // Only calculate for successful transactions
+                                                const calculatedLiters = (isMpesaSuccess || isCash) ? calculateSaleLiters(sale) : 0
+
+                                                // Get phone number for M-Pesa transactions
+                                                const phoneNumber = sale.customer_mobile_no && sale.customer_mobile_no !== 'CASH'
+                                                    ? sale.customer_mobile_no
+                                                    : '—'
+
+                                                // Get M-Pesa transaction code
+                                                const mpesaCode = sale.mpesa_receipt_number || sale.mpesa_transaction_id || '—'
+
+                                                // Get display badge and color for payment status
+                                                const getPaymentBadge = () => {
+                                                    if (isMpesaSuccess) return { text: '📱 M-PESA', color: 'bg-green-100 text-green-700' }
+                                                    if (isMpesaCancelled) return { text: '❌ CANCELLED', color: 'bg-red-100 text-red-600' }
+                                                    if (isMpesaFailed) return { text: '⚠️ FAILED', color: 'bg-orange-100 text-orange-700' }
+                                                    if (isMpesaPending) return { text: '⏳ PENDING', color: 'bg-yellow-100 text-yellow-700' }
+                                                    if (isCash) return { text: '💵 CASH', color: 'bg-amber-100 text-amber-700' }
+                                                    return { text: sale.transaction_status || '—', color: 'bg-gray-100 text-gray-700' }
+                                                }
+                                                const badge = getPaymentBadge()
 
                                                 return (
-                                                    <tr key={sale.sale_id} className="border-b border-gray-100 hover:bg-blue-50 transition-colors">
-                                                        <td className="py-3 px-4">
+                                                    <tr key={sale.sale_id} className={`border-b border-gray-100 hover:bg-blue-50 transition-colors ${(isMpesaCancelled || isMpesaFailed) ? 'bg-red-50/30' : ''}`}>
+                                                        <td className="py-3 px-3">
                                                             <span className="font-mono text-sm font-medium text-blue-600">{sale.sale_id_no || `RCP-${String(sale.sale_id).padStart(5, '0')}`}</span>
                                                         </td>
-                                                        <td className="py-3 px-4">
+                                                        <td className="py-3 px-3">
                                                             <span className="text-sm font-medium text-gray-900">{stationName}</span>
                                                         </td>
-                                                        <td className="py-3 px-4">
+                                                        <td className="py-3 px-3">
                                                             <span className="text-sm text-gray-600">{pumpName}</span>
                                                         </td>
-                                                        <td className="py-3 px-4 text-right">
-                                                            <span className="text-sm text-gray-600">{sale.liters_sold?.toFixed(2) || '0.00'} L</span>
-                                                        </td>
-                                                        <td className="py-3 px-4 text-right">
-                                                            <span className="font-bold text-green-600">{formatCurrency(sale.amount || sale.total_amount || 0)}</span>
-                                                        </td>
-                                                        <td className="py-3 px-4 text-center">
-                                                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${isMpesa ? "bg-green-100 text-green-700" :
-                                                                isCash ? "bg-amber-100 text-amber-700" :
-                                                                    "bg-gray-100 text-gray-700"
-                                                                }`}>
-                                                                {isMpesa ? "📱 M-PESA" : isCash ? "💵 CASH" : sale.transaction_status || "—"}
+                                                        <td className="py-3 px-3 text-right">
+                                                            <span className={`text-sm font-medium ${(isMpesaCancelled || isMpesaFailed) ? 'text-gray-400 line-through' : 'text-blue-600'}`}>
+                                                                {(isMpesaSuccess || isCash) ? `${calculatedLiters.toFixed(2)} L` : '—'}
                                                             </span>
-                                                            {sale.mpesa_receipt_number && (
-                                                                <p className="text-xs text-gray-400 mt-0.5 font-mono">{sale.mpesa_receipt_number}</p>
+                                                        </td>
+                                                        <td className="py-3 px-3 text-right">
+                                                            <span className={`font-bold ${(isMpesaCancelled || isMpesaFailed) ? 'text-gray-400 line-through' : 'text-green-600'}`}>
+                                                                {formatCurrency(sale.amount || sale.total_amount || 0)}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3 px-3 text-center">
+                                                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${badge.color}`}>
+                                                                {badge.text}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3 px-3">
+                                                            {isMpesaAny && phoneNumber !== '—' ? (
+                                                                <span className="text-sm text-gray-700 font-mono">{phoneNumber}</span>
+                                                            ) : (
+                                                                <span className="text-sm text-gray-400">—</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-3">
+                                                            {isMpesaSuccess && mpesaCode !== '—' ? (
+                                                                <span className="text-xs font-mono text-green-600 bg-green-50 px-2 py-1 rounded">{mpesaCode}</span>
+                                                            ) : isMpesaAny && phoneNumber !== '—' ? (
+                                                                <span className="text-xs font-mono text-gray-500">—</span>
+                                                            ) : (
+                                                                <span className="text-sm text-gray-400">—</span>
                                                             )}
                                                         </td>
                                                         <td className="py-3 px-3">
