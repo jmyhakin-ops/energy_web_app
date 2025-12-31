@@ -693,35 +693,41 @@ export default function SalesPage() {
     }
 
     // Helper function to classify payment type properly
-    // M-Pesa transaction can have status: SUCCESS, PENDING, CANCELLED, FAILED, TIMEOUT, etc.
-    // Cash transactions have: payment_method === 'cash' OR transaction_status === 'CASH'
+    // KEY INSIGHT: transaction_status === 'SUCCESS' means SUCCESSFUL M-Pesa payment
+    // transaction_status === 'CASH' means actual cash payment
+    // Other statuses like CANCELLED, FAILED, PENDING, TIMEOUT are M-Pesa that didn't complete
     const getPaymentType = (sale: Sale): 'mpesa_success' | 'mpesa_failed' | 'mpesa_cancelled' | 'mpesa_pending' | 'cash' | 'unknown' => {
         const status = sale.transaction_status?.toUpperCase() || ''
         const method = sale.payment_method?.toLowerCase() || ''
 
-        // Check for actual Cash payments first
-        if (method === 'cash' || status === 'CASH') {
+        // Check for M-Pesa SUCCESS first (this is the key fix!)
+        if (status === 'SUCCESS' || (method === 'mpesa' && sale.mpesa_receipt_number)) {
+            return 'mpesa_success'
+        }
+
+        // Check for M-Pesa failed/cancelled statuses
+        if (status === 'CANCELLED') return 'mpesa_cancelled'
+        if (status === 'FAILED' || status === 'TIMEOUT' || status === 'INSUFFICIENT_FUNDS') return 'mpesa_failed'
+        if (status === 'PENDING') return 'mpesa_pending'
+
+        // Check for M-Pesa by checkout_request_id (started but status unknown)
+        if (sale.checkout_request_id && !status) return 'mpesa_pending'
+
+        // Check for actual Cash payments (CASH status or cash payment method)
+        if (status === 'CASH' || method === 'cash') {
             return 'cash'
         }
 
-        // Check for M-Pesa transactions (by payment method or various statuses)
-        if (method === 'mpesa' || status === 'SUCCESS' || status === 'PENDING' ||
-            status === 'CANCELLED' || status === 'FAILED' || status === 'TIMEOUT' ||
-            status === 'INSUFFICIENT_FUNDS' || sale.checkout_request_id || sale.mpesa_receipt_number) {
-            if (status === 'SUCCESS') return 'mpesa_success'
-            if (status === 'CANCELLED') return 'mpesa_cancelled'
-            if (status === 'FAILED' || status === 'TIMEOUT' || status === 'INSUFFICIENT_FUNDS') return 'mpesa_failed'
-            if (status === 'PENDING') return 'mpesa_pending'
-            // Default to success if has receipt number
-            if (sale.mpesa_receipt_number) return 'mpesa_success'
-            return 'mpesa_pending'
+        // Default: if no status, likely old record - check for mpesa indicators
+        if (sale.mpesa_receipt_number || sale.mpesa_transaction_id) {
+            return 'mpesa_success'
         }
 
         return 'unknown'
     }
 
     // Stats - MUST use filteredSales to reflect current filters!
-    // Only count SUCCESSFUL transactions for totals
+    // Count all transactions for total (both successful M-Pesa and Cash)
     const stats = {
         total: filteredSales
             .filter(s => {
