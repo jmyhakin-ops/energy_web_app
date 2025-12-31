@@ -1,6 +1,6 @@
 "use client"
 
-// Sales & Transactions Page v2.1.0 - Fixed payment classification bug (Dec 31, 2025)
+// Sales & Transactions Page v2.1.1 - Payment classification fix (Dec 31, 2025 08:27)
 
 import { useState, useEffect } from "react"
 import {
