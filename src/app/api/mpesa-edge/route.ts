@@ -8,12 +8,22 @@ const MPESA_BASE_URL = "https://online-link.onrender.com"
 const STK_PUSH_ENDPOINT = `${MPESA_BASE_URL}/stkpush_optimized.php`
 const CHECK_STATUS_ENDPOINT = `${MPESA_BASE_URL}/check_status_optimized.php`
 
-// Format phone number to 254XXXXXXXXX format
+/**
+ * Format phone number to 254XXXXXXXXX format
+ * Supports all Kenyan formats:
+ * - 07XX XXX XXX (original Safaricom, Airtel, Telkom)
+ * - 011X XXX XXX (new Safaricom: 0110-0115)
+ * - 010X XXX XXX (new Airtel: 0100-0109)
+ * - 254XXXXXXXXX (international format)
+ */
 function formatPhoneNumber(phone: string): string {
     let cleaned = phone.replace(/\s+/g, "").replace(/[^0-9]/g, "")
+
     if (cleaned.startsWith("0")) {
+        // Local format: 07x, 010x, 011x -> 2547x, 25410x, 25411x
         cleaned = "254" + cleaned.substring(1)
-    } else if (cleaned.startsWith("7")) {
+    } else if (cleaned.startsWith("7") || cleaned.startsWith("1")) {
+        // Without leading 0: 7x, 10x, 11x
         cleaned = "254" + cleaned
     } else if (cleaned.startsWith("+254")) {
         cleaned = cleaned.substring(1)
@@ -21,10 +31,19 @@ function formatPhoneNumber(phone: string): string {
     return cleaned
 }
 
-// Validate Kenyan phone number
+/**
+ * Validate Kenyan phone number
+ * Supports: 07xxxxxxxx, 0110xxxxxx, 0100xxxxxx, 254xxxxxxxxx
+ */
 function isValidKenyanPhone(phone: string): boolean {
     const cleaned = phone.replace(/\s+/g, "").replace(/[^0-9]/g, "")
-    return /^(07\d{8}|254\d{9})$/.test(cleaned)
+    // Matches:
+    // - 07xxxxxxxx (traditional)
+    // - 011[0-5]xxxxxx (Safaricom new)
+    // - 010[0-9]xxxxxx (Airtel new)
+    // - 2547xxxxxxxx (international traditional)
+    // - 2541[01]xxxxxxx (international new)
+    return /^(07\d{8}|011[0-5]\d{6}|010[0-9]\d{6}|2547\d{8}|2541[01]\d{7})$/.test(cleaned)
 }
 
 // STK Push Request - Edge Optimized
