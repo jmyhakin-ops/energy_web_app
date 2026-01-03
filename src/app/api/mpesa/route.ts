@@ -1,3 +1,11 @@
+/**
+ * M-Pesa STK Push API Route
+ * @version 2.0.0
+ * @updated 2026-01-03
+ * 
+ * Supports all Kenyan phone number formats including new 011x and 010x ranges
+ */
+
 import { NextRequest, NextResponse } from "next/server"
 
 // M-Pesa Backend URLs (Production - Render)
