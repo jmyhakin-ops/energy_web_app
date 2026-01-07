@@ -501,7 +501,7 @@ export default function LoginPage() {
                     {/* Version Badge */}
                     <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
                         <div className="px-4 py-2 bg-white/5 backdrop-blur rounded-full border border-white/10">
-                            <span className="text-xs text-gray-500" style={{ fontFamily: "'Inter', sans-serif" }}>Version 3.6 • Enterprise Edition</span>
+                            <span className="text-xs text-gray-500" style={{ fontFamily: "'Inter', sans-serif" }}>Version 3.7 • Enterprise Edition</span>
                         </div>
                     </div>
                 </div>
