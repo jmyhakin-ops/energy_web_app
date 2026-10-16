@@ -118,51 +118,51 @@ export default function LoginPage() {
         setLoading(true)
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, 500))
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: formData.username,
+                    password: formData.password,
+                }),
+            })
 
-            // ADMIN BYPASS: Allow direct login for initial setup
-            const isAdminBypass = (
-                (formData.username.toLowerCase() === "admin" ||
-                    formData.username.toLowerCase() === "superadmin" ||
-                    formData.username === "jimhawkins") &&
-                (formData.password === "admin123" ||
-                    formData.password === "Admin@123" ||
-                    formData.password === "1234")
-            )
+            const result = await response.json()
 
-            if (isAdminBypass) {
-                toast.success("🔓 Admin Bypass Active", "Logging in without OTP for initial setup...")
-                await new Promise((resolve) => setTimeout(resolve, 1000))
-                router.push("/dashboard")
+            if (!response.ok || !result.success) {
+                toast.error("Login Failed", result.error || "Invalid username or password")
+                setLoading(false)
                 return
             }
 
-            // Check OTP setting from localStorage (default disabled)
-            const isOtpEnabled = localStorage.getItem('otp_enabled') === 'true'
+            // Save user session
+            localStorage.setItem("user_session", JSON.stringify(result.user))
+            localStorage.setItem("currentUser", JSON.stringify(result.user))
 
-            if (!isOtpEnabled) {
-                toast.success("Login Successful", "OTP requirement is turned off")
-                router.push("/dashboard")
-                return
-            }
+            /* 
+             * OTP FLOW (Currently disabled - kept for Africa's Talking integration)
+             *
+             * const isOtpEnabled = localStorage.getItem('otp_enabled') === 'true'
+             * if (isOtpEnabled) {
+             *     const userPhoneNumber = result.user?.mobile || "+254720316175"
+             *     setUserPhone(userPhoneNumber)
+             *     toast.success("📱 Sending OTP...", `To ${userPhoneNumber.slice(0, 7)}****`)
+             *     const otpResult = await sendOtp(userPhoneNumber)
+             *     if (otpResult.success) {
+             *         toast.success("✅ OTP Sent!", otpResult.message || "Check your phone")
+             *         setStep("otp")
+             *         startResendTimer()
+             *         return
+             *     }
+             * }
+             */
 
-            const userPhoneNumber = "+254720316175"
-            setUserPhone(userPhoneNumber)
-
-            toast.success("📱 Sending OTP...", `To ${userPhoneNumber.slice(0, 7)}****`)
-
-            const result = await sendOtp(userPhoneNumber)
-
-            if (result.success) {
-                toast.success("✅ OTP Sent!", result.message || "Check your phone")
-                setStep("otp")
-                startResendTimer()
-            } else {
-                toast.error("❌ Failed to send OTP", result.error || "Please try again")
-            }
+            toast.success("Login Successful", `Welcome, ${result.user?.fullName || result.user?.username}`)
+            router.push("/dashboard")
 
         } catch (error) {
-            toast.error("Login Failed", "Invalid username or password")
+            console.error("Login error:", error)
+            toast.error("Login Failed", "Unable to connect to server. Please try again.")
         } finally {
             setLoading(false)
         }
