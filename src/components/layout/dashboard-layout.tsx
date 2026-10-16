@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
@@ -206,11 +206,41 @@ function Header({ onMenuClick, collapsed, onToggleCollapse }: {
     onToggleCollapse: () => void
 }) {
     const router = useRouter()
+    const [user, setUser] = useState<{ fullName?: string; username?: string; roleName?: string; roleId?: number } | null>(null)
+
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem("currentUser") || localStorage.getItem("user_session")
+            if (raw) {
+                const parsed = JSON.parse(raw)
+                const roleMap: Record<number, string> = {
+                    1: "Admin",
+                    2: "Pump Attendant",
+                    3: "Manager",
+                    4: "Supervisor",
+                    5: "Super Admin",
+                    6: "Director"
+                }
+                if (!parsed.roleName && parsed.roleId) {
+                    parsed.roleName = roleMap[parsed.roleId] || "User"
+                }
+                setUser(parsed)
+            }
+        } catch (e) {
+            console.error("Failed to load user info:", e)
+        }
+    }, [])
 
     const handleLogout = () => {
+        localStorage.removeItem("currentUser")
+        localStorage.removeItem("user_session")
         toast.success("Logged out", "See you next time!")
         router.push("/login")
     }
+
+    const displayName = user?.fullName || user?.username || "Admin User"
+    const displayRole = user?.roleName || (user?.roleId === 5 ? "Super Admin" : "Admin")
+    const initial = (user?.username || user?.fullName || "A").charAt(0).toUpperCase()
 
     return (
         <header className="h-14 sm:h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-6 sticky top-0 z-30">
@@ -244,10 +274,12 @@ function Header({ onMenuClick, collapsed, onToggleCollapse }: {
                 </button>
                 <div className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-4 border-l border-gray-200">
                     <div className="text-right hidden sm:block">
-                        <p className="text-sm font-semibold text-gray-900">Admin User</p>
-                        <p className="text-xs text-gray-500">Super Admin</p>
+                        <p className="text-sm font-semibold text-gray-900">{displayName}</p>
+                        <p className="text-xs text-gray-500">{displayRole}</p>
                     </div>
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">A</div>
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">
+                        {initial}
+                    </div>
                 </div>
             </div>
         </header>

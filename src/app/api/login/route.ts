@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     // Query users_new table for the user
     const { data: users, error } = await supabase
       .from('users_new')
-      .select('user_id, full_name, username, password_hash, role_id, is_active, mobile_no')
+      .select('user_id, full_name, username, password_hash, role_id, is_active, mobile_no, role:user_roles(role_name)')
       .ilike('username', username)
       .limit(1)
 
@@ -52,6 +52,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid username or password' }, { status: 401 })
     }
 
+    const roleMap: Record<number, string> = {
+      1: 'Admin',
+      2: 'Pump Attendant',
+      3: 'Manager',
+      4: 'Supervisor',
+      5: 'Super Admin',
+      6: 'Director'
+    }
+
+    const roleName = (user as any).role?.role_name || roleMap[user.role_id] || 'User'
+
     return NextResponse.json({
       success: true,
       user: {
@@ -59,6 +70,7 @@ export async function POST(req: NextRequest) {
         fullName: user.full_name,
         username: user.username,
         roleId: user.role_id,
+        roleName: roleName,
         mobile: user.mobile_no,
       }
     })
