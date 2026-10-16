@@ -696,9 +696,14 @@ export default function SalesPage() {
     // KEY INSIGHT: transaction_status === 'SUCCESS' means SUCCESSFUL M-Pesa payment
     // transaction_status === 'CASH' means actual cash payment
     // Other statuses like CANCELLED, FAILED, PENDING, TIMEOUT are M-Pesa that didn't complete
-    const getPaymentType = (sale: Sale): 'mpesa_success' | 'mpesa_failed' | 'mpesa_cancelled' | 'mpesa_pending' | 'cash' | 'unknown' => {
+    const getPaymentType = (sale: Sale): 'mpesa_success' | 'mpesa_failed' | 'mpesa_cancelled' | 'mpesa_pending' | 'cash' | 'credit' | 'unknown' => {
         const status = sale.transaction_status?.toUpperCase() || ''
         const method = sale.payment_method?.toLowerCase() || ''
+
+        // Check for CREDIT first
+        if (status === 'CREDIT' || method === 'credit') {
+            return 'credit'
+        }
 
         // Check for M-Pesa SUCCESS first (this is the key fix!)
         if (status === 'SUCCESS' || (method === 'mpesa' && sale.mpesa_receipt_number)) {
@@ -732,7 +737,7 @@ export default function SalesPage() {
         total: filteredSales
             .filter(s => {
                 const type = getPaymentType(s)
-                return type === 'mpesa_success' || type === 'cash'
+                return type === 'mpesa_success' || type === 'cash' || type === 'credit'
             })
             .reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
         count: filteredSales.length,
@@ -742,10 +747,13 @@ export default function SalesPage() {
         cash: filteredSales
             .filter(s => getPaymentType(s) === 'cash')
             .reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
+        credit: filteredSales
+            .filter(s => getPaymentType(s) === 'credit')
+            .reduce((acc, s) => acc + (s.total_amount || s.amount || 0), 0),
         totalLiters: filteredSales
             .filter(s => {
                 const type = getPaymentType(s)
-                return type === 'mpesa_success' || type === 'cash'
+                return type === 'mpesa_success' || type === 'cash' || type === 'credit'
             })
             .reduce((acc, s) => acc + calculateSaleLiters(s), 0),
     }
@@ -938,6 +946,7 @@ export default function SalesPage() {
         switch (method) {
             case "mpesa": return "bg-green-100 text-green-700"
             case "cash": return "bg-amber-100 text-amber-700"
+            case "credit": return "bg-purple-100 text-purple-700"
             case "card": return "bg-blue-100 text-blue-700"
             default: return "bg-gray-100 text-gray-700"
         }
@@ -968,7 +977,7 @@ export default function SalesPage() {
                 </div>
 
                 {/* Stats Cards - Beautiful Gradient Design */}
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
                     {/* Total Sales */}
                     <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -1041,6 +1050,21 @@ export default function SalesPage() {
                             <p className="text-white/80 text-sm font-medium mb-1">Cash</p>
                             <p className="text-2xl sm:text-3xl font-bold text-white">{formatCurrency(stats.cash)}</p>
                             <p className="text-white/70 text-xs mt-1">Cash payments</p>
+                        </div>
+                    </div>
+
+                    {/* Credit */}
+                    <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-purple-500 via-violet-500 to-fuchsia-600 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                        <div className="relative z-10">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                    <span className="text-2xl">🏢</span>
+                                </div>
+                            </div>
+                            <p className="text-white/80 text-sm font-medium mb-1">Credit</p>
+                            <p className="text-2xl sm:text-3xl font-bold text-white">{formatCurrency(stats.credit)}</p>
+                            <p className="text-white/70 text-xs mt-1">Credit sales</p>
                         </div>
                     </div>
                 </div>
@@ -1217,6 +1241,7 @@ export default function SalesPage() {
                                                 <th className="text-right py-4 px-3 text-xs font-bold text-gray-600 uppercase">💰 Amount</th>
                                                 <th className="text-center py-4 px-3 text-xs font-bold text-gray-600 uppercase">✅ Payment</th>
                                                 <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">📱 Phone No</th>
+                                                <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">🏢 Credit Customer</th>
                                                 <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">🔗 M-Pesa Code</th>
                                                 <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">👤 Attendant</th>
                                                 <th className="text-left py-4 px-3 text-xs font-bold text-gray-600 uppercase">🕐 Shift</th>
@@ -1238,11 +1263,17 @@ export default function SalesPage() {
                                                 const isMpesaFailed = paymentType === 'mpesa_failed'
                                                 const isMpesaPending = paymentType === 'mpesa_pending'
                                                 const isMpesaAny = isMpesaSuccess || isMpesaCancelled || isMpesaFailed || isMpesaPending
+                                                const isCredit = paymentType === 'credit'
                                                 const isCash = paymentType === 'cash'
 
                                                 // Calculate liters dynamically using helper function
                                                 // Only calculate for successful transactions
-                                                const calculatedLiters = (isMpesaSuccess || isCash) ? calculateSaleLiters(sale) : 0
+                                                const calculatedLiters = (isMpesaSuccess || isCash || isCredit)
+                                                    ? (sale.liters_sold || calculateSaleLiters(sale))
+                                                    : 0
+
+                                                // Credit customer name (stored in customer_mobile_no for credit sales)
+                                                const creditCustomerName = isCredit ? (sale.customer_mobile_no || '—') : '—'
 
                                                 // Get phone number for M-Pesa transactions
                                                 const phoneNumber = sale.customer_mobile_no && sale.customer_mobile_no !== 'CASH'
@@ -1288,13 +1319,13 @@ export default function SalesPage() {
                                                         </td>
                                                         {/* Liters */}
                                                         <td className="py-4 px-3 text-right">
-                                                            {(isMpesaSuccess || isCash) ? (
+                                                            {(isMpesaSuccess || isCash || isCredit) ? (
                                                                 <div className="flex items-center justify-end gap-1">
                                                                     <Droplets className="w-3.5 h-3.5 text-cyan-600" />
-                                                                    <span className="font-semibold text-cyan-700">{calculatedLiters.toFixed(2)} L</span>
+                                                                    <span className="font-semibold text-cyan-700">{(calculatedLiters || 0).toFixed(2)} L</span>
                                                                 </div>
                                                             ) : (
-                                                                <span className="text-gray-400 line-through">{calculatedLiters.toFixed(2)} L</span>
+                                                                <span className="text-gray-400 line-through">{(calculatedLiters || 0).toFixed(2)} L</span>
                                                             )}
                                                         </td>
                                                         {/* Amount */}
@@ -1323,6 +1354,21 @@ export default function SalesPage() {
                                                             )}
                                                         </td>
                                                         {/* M-Pesa Code */}
+                                                        <td className="py-4 px-3">
+                                                            {isCredit ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center">
+                                                                        <span className="text-sm">🏢</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-semibold text-purple-700 text-sm">{creditCustomerName}</p>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-gray-400 text-sm">—</span>
+                                                            )}
+                                                        </td>
+                                                        {/* M-Pesa Receipt */}
                                                         <td className="py-4 px-3">
                                                             {isMpesaSuccess && mpesaCode !== '—' ? (
                                                                 <span className="font-mono text-sm text-gray-700 bg-green-100 px-2 py-1 rounded-lg">{mpesaCode}</span>

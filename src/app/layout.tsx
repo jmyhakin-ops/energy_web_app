@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { Providers } from "./providers"
+import { SessionTimeout } from "@/components/SessionTimeout"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -25,10 +26,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.png" type="image/png" />
         <meta name="theme-color" content="#3B82F6" />
       </head>
       <body className={inter.className}>
+        <SessionTimeout />
         <Providers>{children}</Providers>
       </body>
     </html>

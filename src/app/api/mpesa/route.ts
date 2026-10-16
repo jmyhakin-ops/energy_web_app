@@ -8,10 +8,10 @@
 
 import { NextRequest, NextResponse } from "next/server"
 
-// M-Pesa Backend URLs (Production - Render)
-const MPESA_BASE_URL = "https://online-link.onrender.com"
-const STK_PUSH_ENDPOINT = `${MPESA_BASE_URL}/stkpush.php`
-const CHECK_STATUS_ENDPOINT = `${MPESA_BASE_URL}/check_status.php`
+// M-Pesa Backend URLs (Production - Supabase Edge Functions)
+const MPESA_BASE_URL = "https://pxcdaivlvltmdifxietb.supabase.co/functions/v1"
+const STK_PUSH_ENDPOINT = `${MPESA_BASE_URL}/stkpush`
+const CHECK_STATUS_ENDPOINT = `${MPESA_BASE_URL}/check-status`
 
 /**
  * Format phone number to 254XXXXXXXXX format

@@ -124,7 +124,7 @@ export function useBackgroundWorker(config: BackgroundWorkerConfig = {}) {
             for (const [checkoutId, data] of pending) {
                 try {
                     const response = await fetch(
-                        `${process.env.NEXT_PUBLIC_API_URL || 'https://online-link.onrender.com'}/check_status_optimized.php?checkout_request_id=${checkoutId}`
+                        `${process.env.NEXT_PUBLIC_API_URL || 'https://pxcdaivlvltmdifxietb.supabase.co/functions/v1'}/check-status?checkout_request_id=${checkoutId}`
                     )
                     const result = await response.json()
 

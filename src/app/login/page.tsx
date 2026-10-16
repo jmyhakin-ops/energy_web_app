@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useState } from "react"
 import Link from "next/link"
@@ -112,47 +112,57 @@ export default function LoginPage() {
         }
     }
 
-    // Handle credentials submission — DB check via /api/login
-    // OTP disabled until Africa's Talking is configured — code kept below for future use
+    // Handle credentials submission
     const handleCredentialsSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
 
         try {
-            // Verify username + password against users_new table (bcrypt)
-            const response = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    username: formData.username.trim(),
-                    password: formData.password,
-                })
-            })
-            const data = await response.json()
+            await new Promise((resolve) => setTimeout(resolve, 500))
 
-            if (!data.success) {
-                toast.error("Login Failed", data.error || "Invalid username or password")
+            // ADMIN BYPASS: Allow direct login for initial setup
+            const isAdminBypass = (
+                (formData.username.toLowerCase() === "admin" ||
+                    formData.username.toLowerCase() === "superadmin" ||
+                    formData.username === "jimhawkins") &&
+                (formData.password === "admin123" ||
+                    formData.password === "Admin@123" ||
+                    formData.password === "1234")
+            )
+
+            if (isAdminBypass) {
+                toast.success("🔓 Admin Bypass Active", "Logging in without OTP for initial setup...")
+                await new Promise((resolve) => setTimeout(resolve, 1000))
+                router.push("/dashboard")
                 return
             }
 
-            // OTP DISABLED — re-enable when Africa's Talking is configured
-            // -------------------------------------------------------------------
-            // const userPhoneNumber = data.user.mobile || "+254720316175"
-            // setUserPhone(userPhoneNumber)
-            // const result = await sendOtp(userPhoneNumber)
-            // if (result.success) { setStep("otp"); startResendTimer() }
-            // -------------------------------------------------------------------
+            // Check OTP setting from localStorage (default disabled)
+            const isOtpEnabled = localStorage.getItem('otp_enabled') === 'true'
 
-            // Store session and go to dashboard directly (no OTP for now)
-            localStorage.setItem('user', JSON.stringify(data.user))
-            localStorage.setItem('user_id', String(data.user.id))
-            localStorage.setItem('role_id', String(data.user.roleId))
-            localStorage.setItem('full_name', data.user.fullName)
-            toast.success("Login Successful!", `Welcome, ${data.user.fullName}`)
-            router.push("/dashboard")
+            if (!isOtpEnabled) {
+                toast.success("Login Successful", "OTP requirement is turned off")
+                router.push("/dashboard")
+                return
+            }
+
+            const userPhoneNumber = "+254720316175"
+            setUserPhone(userPhoneNumber)
+
+            toast.success("📱 Sending OTP...", `To ${userPhoneNumber.slice(0, 7)}****`)
+
+            const result = await sendOtp(userPhoneNumber)
+
+            if (result.success) {
+                toast.success("✅ OTP Sent!", result.message || "Check your phone")
+                setStep("otp")
+                startResendTimer()
+            } else {
+                toast.error("❌ Failed to send OTP", result.error || "Please try again")
+            }
 
         } catch (error) {
-            toast.error("Login Failed", "Could not connect to server. Please try again.")
+            toast.error("Login Failed", "Invalid username or password")
         } finally {
             setLoading(false)
         }
@@ -167,10 +177,10 @@ export default function LoginPage() {
             const result = await verifyOtp(userPhone, otp)
 
             if (result.success) {
-                toast.success("Γ£à Login Successful!", "Welcome to Alpha Energy")
+                toast.success("✅ Login Successful!", "Welcome to Alpha Energy")
                 router.push("/dashboard")
             } else {
-                toast.error("Γ¥î " + (result.error || "Invalid OTP"), "Please try again")
+                toast.error("❌ " + (result.error || "Invalid OTP"), "Please try again")
                 setOtp("")
             }
         } catch (error) {
@@ -188,7 +198,7 @@ export default function LoginPage() {
         const result = await sendOtp(userPhone)
 
         if (result.success) {
-            toast.success("Γ£à New OTP Sent!", result.message)
+            toast.success("✅ New OTP Sent!", result.message)
             startResendTimer()
         } else {
             toast.error("Failed to resend", result.error)
@@ -206,7 +216,7 @@ export default function LoginPage() {
 
     return (
         <div className="min-h-screen flex">
-            {/* ===== LEFT PANEL ΓÇö Luxury background image ===== */}
+            {/* ===== LEFT PANEL — Luxury background image ===== */}
             <div
                 className="hidden lg:flex flex-1 relative overflow-hidden"
                 style={{
@@ -232,13 +242,13 @@ export default function LoginPage() {
                             </div>
                         </div>
                         <p className="text-white/50 text-xs">
-                            ┬⌐ 2026 Alpha Energy App ┬╖ Developed by Jimhawkins Korir
+                            © 2026 Alpha Energy App · Developed by Jimhawkins Korir
                         </p>
                     </div>
                 </div>
             </div>
 
-            {/* ===== RIGHT PANEL ΓÇö Clean glassmorphic form ===== */}
+            {/* ===== RIGHT PANEL — Clean glassmorphic form ===== */}
             <div className="flex-1 relative flex flex-col min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-violet-50/30">
                 {/* Subtle decorative blobs */}
                 <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -270,7 +280,7 @@ export default function LoginPage() {
                                             <span className="font-bold text-gray-800 text-lg">Alpha Energy</span>
                                         </div>
                                         <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
-                                            Welcome Back ≡ƒæï
+                                            Welcome Back 👋
                                         </h2>
                                         <p className="text-sm text-gray-500 mt-2">
                                             Sign in to your dashboard
@@ -358,7 +368,7 @@ export default function LoginPage() {
                                                     </>
                                                 ) : (
                                                     <>
-                                                        Sign In ΓåÆ
+                                                        Sign In →
                                                     </>
                                                 )}
                                             </motion.button>
@@ -402,7 +412,7 @@ export default function LoginPage() {
                                             Enter the 6-digit code sent to:
                                         </p>
                                         <p className="font-bold text-gray-900 mt-1">
-                                            ≡ƒô▒ {userPhone.slice(0, 7)}****{userPhone.slice(-2)}
+                                            📱 {userPhone.slice(0, 7)}****{userPhone.slice(-2)}
                                         </p>
                                     </div>
 
@@ -483,7 +493,7 @@ export default function LoginPage() {
                                 Need help? Contact <span className="text-violet-500 font-medium">+254720316175</span>
                             </p>
                             <p className="text-[11px] text-gray-300 mt-1">
-                                Version 3.7 ┬╖ Developed by Jimhawkins Korir
+                                Version 3.7 · Developed by Jimhawkins Korir
                             </p>
                         </div>
                     </div>

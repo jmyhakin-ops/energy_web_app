@@ -6,7 +6,7 @@ import {
     Building2, Fuel, Users, Clock, BarChart3, Smartphone, TrendingUp,
     RefreshCw, Zap, ArrowRight, Loader2, AlertCircle, Wallet, Receipt,
     CreditCard, Banknote, FileText, PiggyBank, DollarSign, Calculator,
-    Activity, ShoppingBag, TrendingDown, Calendar, Filter, X
+    Activity, ShoppingBag, TrendingDown, Calendar, Filter, X, Percent
 } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -44,15 +44,17 @@ function GradientStatCard({
 }
 
 // Revenue Summary Card - LIGHT GRADIENT (no solid green)
-function ModernRevenueCard({ totalSales, mpesaSales, cashSales, transactionCount, dateLabel }: {
+function ModernRevenueCard({ totalSales, mpesaSales, cashSales, creditSales, transactionCount, dateLabel }: {
     totalSales: number
     mpesaSales: number
     cashSales: number
+    creditSales: number
     transactionCount: number
     dateLabel: string
 }) {
     const mpesaPercent = totalSales > 0 ? (mpesaSales / totalSales * 100).toFixed(1) : 0
     const cashPercent = totalSales > 0 ? (cashSales / totalSales * 100).toFixed(1) : 0
+    const creditPercent = totalSales > 0 ? (creditSales / totalSales * 100).toFixed(1) : 0
 
     return (
         <div className="bg-gradient-to-br from-white via-sky-50 to-indigo-100 rounded-3xl p-6 shadow-xl border border-sky-200">
@@ -65,8 +67,8 @@ function ModernRevenueCard({ totalSales, mpesaSales, cashSales, transactionCount
                     <p className="text-4xl font-bold text-gray-900">{formatCurrency(totalSales)}</p>
                     <p className="text-sky-600 text-sm mt-1">{transactionCount} transactions completed</p>
                 </div>
-                <div className="flex gap-4">
-                    <div className="bg-gradient-to-br from-green-50 to-emerald-100 border border-green-200 rounded-2xl p-4 min-w-[140px]">
+                <div className="flex gap-3 flex-wrap">
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-100 border border-green-200 rounded-2xl p-4 min-w-[120px]">
                         <div className="flex items-center gap-2 mb-1">
                             <Smartphone className="w-4 h-4 text-green-600" />
                             <span className="text-sm text-green-700 font-medium">M-Pesa</span>
@@ -74,13 +76,21 @@ function ModernRevenueCard({ totalSales, mpesaSales, cashSales, transactionCount
                         <p className="text-xl font-bold text-green-900">{formatCurrency(mpesaSales)}</p>
                         <p className="text-xs text-green-600">{mpesaPercent}% of total</p>
                     </div>
-                    <div className="bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200 rounded-2xl p-4 min-w-[140px]">
+                    <div className="bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200 rounded-2xl p-4 min-w-[120px]">
                         <div className="flex items-center gap-2 mb-1">
                             <Banknote className="w-4 h-4 text-amber-600" />
                             <span className="text-sm text-amber-700 font-medium">Cash</span>
                         </div>
                         <p className="text-xl font-bold text-amber-900">{formatCurrency(cashSales)}</p>
                         <p className="text-xs text-amber-600">{cashPercent}% of total</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-purple-50 to-violet-100 border border-purple-200 rounded-2xl p-4 min-w-[120px]">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Building2 className="w-4 h-4 text-purple-600" />
+                            <span className="text-sm text-purple-700 font-medium">Credit</span>
+                        </div>
+                        <p className="text-xl font-bold text-purple-900">{formatCurrency(creditSales)}</p>
+                        <p className="text-xs text-purple-600">{creditPercent}% of total</p>
                     </div>
                 </div>
             </div>
@@ -160,6 +170,9 @@ interface Sale {
     pump_id: number
     attendant_id: number
     pump_shift_id: number
+    fuel_type_id?: number
+    liters_sold?: number
+    price_per_liter?: number
 }
 
 // Get today's date in YYYY-MM-DD format
@@ -198,7 +211,13 @@ export default function DashboardPage() {
         totalExpenses: 0,
         pendingAdvances: 0,
         pendingVouchers: 0,
+        totalExpectedProfit: 0,
+        todayProfit: 0,
     })
+
+    // Store latest price/cost maps for dynamic profit calculation
+    const [fuelPriceMap, setFuelPriceMap] = useState<Record<number, number>>({})
+    const [fuelCostMap, setFuelCostMap] = useState<Record<number, number>>({})
 
     const fetchData = async () => {
         try {
@@ -222,18 +241,24 @@ export default function DashboardPage() {
                 expensesRes,
                 advancesRes,
                 vouchersRes,
+                refillsRes,
+                pricesRes,
+                fuelTypesRes,
             ] = await Promise.all([
                 supabase.from("stations").select("*").order("station_name"),
-                supabase.from("pumps").select("pump_id, pump_name, station_id").eq("is_active", true),
+                supabase.from("pumps").select("pump_id, pump_name, station_id, fuel_type_id").eq("is_active", true),
                 supabase.from("users_new").select("user_id, full_name").eq("is_active", true),
                 supabase.from("shifts").select("shift_id, shift_name"),
                 supabase.from("pump_shifts").select("pump_shift_id, shift_id").eq("is_closed", false),
                 // Fetch ALL sales with dates for filtering
-                supabase.from("sales").select("sale_id, amount, total_amount, payment_method, transaction_status, created_at, station_id, pump_id, attendant_id, pump_shift_id"),
+                supabase.from("sales").select("sale_id, amount, total_amount, payment_method, transaction_status, created_at, station_id, pump_id, attendant_id, pump_shift_id, fuel_type_id, liters_sold, price_per_liter"),
                 supabase.from("payroll").select("net_salary, payment_status"),
                 supabase.from("expenses").select("amount, status"),
                 supabase.from("salary_advances").select("amount, status").eq("status", "pending"),
                 supabase.from("vouchers").select("amount, status").eq("status", "pending"),
+                supabase.from("fuel_refills").select("fuel_type_id, quantity_liters, cost_per_liter, delivery_date").limit(1000),
+                supabase.from("fuel_prices").select("fuel_type_id, selling_price, effective_date").order("effective_date", { ascending: false }),
+                supabase.from("fuel_types").select("fuel_type_id, price_per_liter").eq("is_active", true),
             ])
 
             const stationsData = stationsRes.data || []
@@ -259,6 +284,44 @@ export default function DashboardPage() {
             const pendingAdvances = advancesData.reduce((acc, a) => acc + (a.amount || 0), 0)
             const pendingVouchers = vouchersData.reduce((acc, v) => acc + (v.amount || 0), 0)
 
+            const refillsData = refillsRes.data || []
+            const pricesData = pricesRes.data || []
+            const fuelTypesData = fuelTypesRes.data || []
+
+            // Build selling price map from fuel_prices (latest per fuel type)
+            const latestPriceMap: Record<number, number> = {}
+            for (const p of pricesData) {
+                if (!latestPriceMap[p.fuel_type_id]) {
+                    latestPriceMap[p.fuel_type_id] = p.selling_price
+                }
+            }
+            // Fallback: if fuel_prices has no entry, use fuel_types.price_per_liter
+            for (const ft of fuelTypesData) {
+                if (!latestPriceMap[ft.fuel_type_id] && ft.price_per_liter > 0) {
+                    latestPriceMap[ft.fuel_type_id] = ft.price_per_liter
+                }
+            }
+
+            const todayStr = new Date().toDateString()
+            let totalExpectedProfit = 0
+            let todayProfit = 0
+
+            const latestCostMap: Record<number, number> = {}
+            for (const r of refillsData) {
+                if (!latestCostMap[r.fuel_type_id]) {
+                    latestCostMap[r.fuel_type_id] = r.cost_per_liter || 0
+                }
+                const sellingPrice = latestPriceMap[r.fuel_type_id] || 0
+                const costPrice = r.cost_per_liter || 0
+                const profitPerLiter = sellingPrice - costPrice
+                if (profitPerLiter > 0) {
+                    totalExpectedProfit += r.quantity_liters * profitPerLiter
+                    if (new Date(r.delivery_date).toDateString() === todayStr) {
+                        todayProfit += r.quantity_liters * profitPerLiter
+                    }
+                }
+            }
+
             setStats({
                 activeShifts: pumpShiftsData.length,
                 stationsOnline: stationsData.filter(s => s.is_online).length,
@@ -269,7 +332,12 @@ export default function DashboardPage() {
                 totalExpenses,
                 pendingAdvances,
                 pendingVouchers,
+                totalExpectedProfit,
+                todayProfit,
             })
+
+            setFuelPriceMap(latestPriceMap)
+            setFuelCostMap(latestCostMap)
 
         } catch (error) {
             console.error("Failed to fetch data:", error)
@@ -310,14 +378,16 @@ export default function DashboardPage() {
 
     // Calculate filtered stats
     const salesStats = useMemo(() => {
+        const creditSales = filteredSales.filter(s => s.transaction_status === "CREDIT" || s.payment_method === "credit").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
+        const mpesaSales = filteredSales.filter(s => (s.payment_method === "mpesa" || s.transaction_status === "SUCCESS") && s.transaction_status !== "CREDIT").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
+        const cashSales = filteredSales.filter(s => (s.payment_method === "cash" || s.transaction_status === "CASH") && s.transaction_status !== "CREDIT").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
         const totalSales = filteredSales.reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
-        const mpesaSales = filteredSales.filter(s => s.payment_method === "mpesa" || s.transaction_status === "SUCCESS").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
-        const cashSales = filteredSales.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
 
         return {
             totalSales,
             mpesaSales,
             cashSales,
+            creditSales,
             transactionCount: filteredSales.length
         }
     }, [filteredSales])
@@ -327,11 +397,29 @@ export default function DashboardPage() {
         return stations.map(station => {
             const stationSales = filteredSales.filter(s => s.station_id === station.station_id)
             const total = stationSales.reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
-            const mpesa = stationSales.filter(s => s.payment_method === "mpesa" || s.transaction_status === "SUCCESS").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
-            const cash = stationSales.filter(s => s.payment_method === "cash" || s.transaction_status === "CASH").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
-            return { ...station, totalSales: total, mpesaSales: mpesa, cashSales: cash, transactionCount: stationSales.length }
+            const mpesa = stationSales.filter(s => (s.payment_method === "mpesa" || s.transaction_status === "SUCCESS") && s.transaction_status !== "CREDIT").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
+            const cash = stationSales.filter(s => (s.payment_method === "cash" || s.transaction_status === "CASH") && s.transaction_status !== "CREDIT").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
+            const credit = stationSales.filter(s => s.transaction_status === "CREDIT" || s.payment_method === "credit").reduce((acc, s) => acc + (s.amount || s.total_amount || 0), 0)
+
+            const profit = stationSales.reduce((acc, s) => {
+                const ftId = s.fuel_type_id
+                if (!ftId) return acc
+                const liters = s.liters_sold || 0
+                if (liters <= 0) return acc
+
+                const sellingPrice = s.price_per_liter || fuelPriceMap[ftId] || 0
+                const costPrice = fuelCostMap[ftId] || 0
+                const margin = sellingPrice - costPrice
+
+                if (margin > 0) {
+                    return acc + (liters * margin)
+                }
+                return acc
+            }, 0)
+
+            return { ...station, totalSales: total, mpesaSales: mpesa, cashSales: cash, creditSales: credit, totalProfit: profit, transactionCount: stationSales.length }
         }).sort((a, b) => b.totalSales - a.totalSales).slice(0, 5)
-    }, [stations, filteredSales])
+    }, [stations, filteredSales, fuelPriceMap, fuelCostMap])
 
     const handleRefresh = async () => {
         setRefreshing(true)
@@ -497,9 +585,30 @@ export default function DashboardPage() {
                     totalSales={salesStats.totalSales}
                     mpesaSales={salesStats.mpesaSales}
                     cashSales={salesStats.cashSales}
+                    creditSales={salesStats.creditSales}
                     transactionCount={salesStats.transactionCount}
                     dateLabel={getDateLabel()}
                 />
+
+                {/* Profit Cards — Compact Modern */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-gradient-to-br from-emerald-50 to-green-100 rounded-2xl p-5 border border-emerald-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                        <div className="flex items-center gap-2 mb-2">
+                            <TrendingUp className="w-5 h-5 text-emerald-600" />
+                            <span className="text-sm font-medium text-emerald-800 opacity-80">Total Expected Profit</span>
+                        </div>
+                        <p className="text-2xl font-bold text-emerald-900">{formatCurrency(stats.totalExpectedProfit)}</p>
+                        <p className="text-xs text-emerald-700 opacity-70 mt-1">Selling price − Cost price × Liters</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl p-5 border border-blue-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                        <div className="flex items-center gap-2 mb-2">
+                            <DollarSign className="w-5 h-5 text-blue-600" />
+                            <span className="text-sm font-medium text-blue-800 opacity-80">Today&apos;s Expected Profit</span>
+                        </div>
+                        <p className="text-2xl font-bold text-blue-900">{formatCurrency(stats.todayProfit)}</p>
+                        <p className="text-xs text-blue-700 opacity-70 mt-1">From today&apos;s refill deliveries</p>
+                    </div>
+                </div>
 
                 {/* Operations Stats - Modern Gradient Cards */}
                 <div>
@@ -641,10 +750,16 @@ export default function DashboardPage() {
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="font-bold text-lg text-gray-900">{formatCurrency(station.totalSales)}</p>
-                                                    <div className="flex gap-3 text-xs mt-1">
+                                                    <div className="flex justify-end gap-3 text-xs mt-1">
                                                         <span className="text-emerald-600">📱 {formatCurrency(station.mpesaSales)}</span>
                                                         <span className="text-amber-600">💵 {formatCurrency(station.cashSales)}</span>
+                                                        <span className="text-purple-600">🏢 {formatCurrency(station.creditSales)}</span>
                                                     </div>
+                                                    {station.totalProfit > 0 && (
+                                                        <p className="text-xs font-semibold text-emerald-700 mt-1.5 flex items-center justify-end gap-1">
+                                                            <Activity className="w-3.5 h-3.5" /> Profit: {formatCurrency(station.totalProfit)}
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

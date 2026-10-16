@@ -1,5 +1,5 @@
 // API Configuration
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://online-link.onrender.com'
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pxcdaivlvltmdifxietb.supabase.co/functions/v1'
 
 // API Endpoints
 export const API_ENDPOINTS = {

@@ -3,10 +3,10 @@ import { NextRequest, NextResponse } from "next/server"
 // Enable Edge Runtime for ultra-fast cold starts
 export const runtime = "edge"
 
-// M-Pesa Backend URL - Use optimized endpoint
-const MPESA_BASE_URL = "https://online-link.onrender.com"
-const STK_PUSH_ENDPOINT = `${MPESA_BASE_URL}/stkpush_optimized.php`
-const CHECK_STATUS_ENDPOINT = `${MPESA_BASE_URL}/check_status_optimized.php`
+// M-Pesa Backend URL - Supabase Edge Functions
+const MPESA_BASE_URL = "https://pxcdaivlvltmdifxietb.supabase.co/functions/v1"
+const STK_PUSH_ENDPOINT = `${MPESA_BASE_URL}/stkpush`
+const CHECK_STATUS_ENDPOINT = `${MPESA_BASE_URL}/check-status`
 
 /**
  * Format phone number to 254XXXXXXXXX format

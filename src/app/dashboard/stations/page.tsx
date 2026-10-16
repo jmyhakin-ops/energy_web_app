@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import {
     Building2, Plus, MapPin, Phone, Users, Fuel, Edit, Trash2, Eye,
-    CheckCircle, XCircle, Loader2, RefreshCw, Save, X, Globe, Clock, Mail
+    CheckCircle, XCircle, Loader2, RefreshCw, Save, X, Globe, Clock, Mail,
+    ChevronDown, ChevronUp, Droplet
 } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -33,6 +34,47 @@ interface Station {
     pump_count?: number
     attendant_count?: number
     today_sales?: number
+}
+
+interface StationPump {
+    pump_id: number
+    pump_name: string
+    station_id: number
+    fuel_type_id: number | null
+    is_active: boolean
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fuel_type?: any
+}
+
+interface FuelRefill {
+    station_id: number
+    fuel_type_id: number
+    quantity_liters: number
+}
+
+interface SaleRecord {
+    station_id: number
+    fuel_type_id: number | null
+    liters_sold: number | null
+    amount: number
+    total_amount: number
+}
+
+interface FuelTypeInfo {
+    fuel_type_id: number
+    fuel_name: string
+    color_code: string
+    price_per_liter?: number
+}
+
+// Fuel stock per fuel type per station
+interface FuelStockItem {
+    fuel_type_id: number
+    fuel_name: string
+    color_code: string
+    purchased: number
+    sold: number
+    available: number
 }
 
 // Generate station code like TP01, TP02, etc.
@@ -306,7 +348,7 @@ function ViewStationModal({ station, onClose }: { station: Station; onClose: () 
                 <div className="p-6 space-y-4">
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center">
-                            <Building2 className="w-8988 h-8 text-blue-600" />
+                            <Building2 className="w-8 h-8 text-blue-600" />
                         </div>
                         <div>
                             <h3 className="text-xl font-bold text-gray-900">{station.station_name}</h3>
@@ -364,6 +406,13 @@ export default function StationsPage() {
     const [showViewModal, setShowViewModal] = useState(false)
     const [selectedStation, setSelectedStation] = useState<Station | null>(null)
 
+    // NEW: expandable pump/fuel details
+    const [expandedStations, setExpandedStations] = useState<Set<number>>(new Set())
+    const [stationPumps, setStationPumps] = useState<StationPump[]>([])
+    const [fuelRefills, setFuelRefills] = useState<FuelRefill[]>([])
+    const [salesRecords, setSalesRecords] = useState<SaleRecord[]>([])
+    const [fuelTypes, setFuelTypes] = useState<FuelTypeInfo[]>([])
+
     useEffect(() => {
         fetchStations()
     }, [])
@@ -372,13 +421,26 @@ export default function StationsPage() {
         setLoading(true)
         try {
             if (isSupabaseConfigured() && supabase) {
-                const { data, error } = await supabase
-                    .from("stations")
-                    .select("*")
-                    .order("station_name")
+                // Fetch all data in parallel
+                const [stationsRes, pumpsRes, refillsRes, salesRes, fuelTypesRes] = await Promise.all([
+                    supabase.from("stations").select("*").order("station_name"),
+                    supabase.from("pumps").select("pump_id, pump_name, station_id, fuel_type_id, is_active, fuel_type:fuel_types(fuel_type_id, fuel_name, color_code)"),
+                    supabase.from("fuel_refills").select("station_id, fuel_type_id, quantity_liters"),
+                    supabase.from("sales").select("station_id, fuel_type_id, liters_sold, amount, total_amount"),
+                    supabase.from("fuel_types").select("fuel_type_id, fuel_name, color_code, price_per_liter").eq("is_active", true),
+                ])
 
-                if (error) throw error
-                setStations(data || [])
+                if (stationsRes.error) throw stationsRes.error
+                setStations(stationsRes.data || [])
+                // Normalize pump fuel_type (Supabase may return as array)
+                const normalizedPumps = (pumpsRes.data || []).map((p: any) => ({
+                    ...p,
+                    fuel_type: Array.isArray(p.fuel_type) ? p.fuel_type[0] : p.fuel_type
+                }))
+                setStationPumps(normalizedPumps)
+                setFuelRefills(refillsRes.data || [])
+                setSalesRecords(salesRes.data || [])
+                setFuelTypes(fuelTypesRes.data || [])
             } else {
                 toast.error("Database not configured", "Please configure Supabase")
                 setStations([])
@@ -453,6 +515,66 @@ export default function StationsPage() {
             const errorMessage = error instanceof Error ? error.message : "Failed to update"
             toast.error("Error", errorMessage)
         }
+    }
+
+    // Toggle expand/collapse for a station
+    const toggleExpand = (stationId: number) => {
+        setExpandedStations(prev => {
+            const next = new Set(prev)
+            if (next.has(stationId)) {
+                next.delete(stationId)
+            } else {
+                next.add(stationId)
+            }
+            return next
+        })
+    }
+
+    // Get fuel stock breakdown for a station
+    const getStationFuelStock = (stationId: number): FuelStockItem[] => {
+        // Get all fuel types that have refills or pumps at this station
+        const stationRefills = fuelRefills.filter(r => r.station_id === stationId)
+        const stationSales = salesRecords.filter(s => s.station_id === stationId)
+        const stationPumpsList = stationPumps.filter(p => p.station_id === stationId)
+
+        // Collect all fuel type IDs relevant to this station
+        const fuelTypeIds = new Set<number>()
+        stationRefills.forEach(r => fuelTypeIds.add(r.fuel_type_id))
+        stationSales.forEach(s => { if (s.fuel_type_id) fuelTypeIds.add(s.fuel_type_id) })
+        stationPumpsList.forEach(p => { if (p.fuel_type_id) fuelTypeIds.add(p.fuel_type_id) })
+
+        return Array.from(fuelTypeIds).map(ftId => {
+            const ft = fuelTypes.find(f => f.fuel_type_id === ftId)
+            const purchased = stationRefills
+                .filter(r => r.fuel_type_id === ftId)
+                .reduce((sum, r) => sum + (r.quantity_liters || 0), 0)
+
+            // Calculate sold litres
+            let sold = 0
+            const ftSales = stationSales.filter(s => s.fuel_type_id === ftId)
+            ftSales.forEach(s => {
+                if (s.liters_sold && s.liters_sold > 0) {
+                    sold += s.liters_sold
+                } else if (ft?.price_per_liter && ft.price_per_liter > 0) {
+                    // Estimate from amount
+                    sold += (s.amount || s.total_amount || 0) / ft.price_per_liter
+                }
+            })
+
+            return {
+                fuel_type_id: ftId,
+                fuel_name: ft?.fuel_name || `Fuel #${ftId}`,
+                color_code: ft?.color_code || "#3B82F6",
+                purchased: Math.round(purchased * 100) / 100,
+                sold: Math.round(sold * 100) / 100,
+                available: Math.round((purchased - sold) * 100) / 100,
+            }
+        }).sort((a, b) => a.fuel_name.localeCompare(b.fuel_name))
+    }
+
+    // Get pumps for a station
+    const getStationPumps = (stationId: number) => {
+        return stationPumps.filter(p => p.station_id === stationId)
     }
 
     // Filter stations
@@ -546,7 +668,7 @@ export default function StationsPage() {
                     </CardContent>
                 </Card>
 
-                {/* Stations List */}
+                {/* Stations List with Expandable Fuel Details */}
                 <Card>
                     <CardHeader>
                         <CardTitle>
@@ -569,6 +691,7 @@ export default function StationsPage() {
                                 <table className="w-full min-w-[800px]">
                                     <thead>
                                         <tr className="border-b border-gray-200">
+                                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase w-8"></th>
                                             <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Station</th>
                                             <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Contact</th>
                                             <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Manager</th>
@@ -577,77 +700,203 @@ export default function StationsPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredStations.map((station) => (
-                                            <tr key={station.station_id} className="border-b border-gray-100 hover:bg-gray-50">
-                                                <td className="py-4 px-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                                                            <Building2 className="w-5 h-5 text-blue-600" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-semibold text-gray-900">{station.station_name}</p>
-                                                            <p className="text-xs text-gray-500 flex items-center gap-1">
-                                                                <MapPin className="w-3 h-3" /> {station.city || station.physical_address || "No location"}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="py-4 px-4">
-                                                    <div className="text-sm text-gray-600">
-                                                        {station.station_phone && (
-                                                            <p className="flex items-center gap-1"><Phone className="w-3 h-3" /> {station.station_phone}</p>
-                                                        )}
-                                                        {station.station_email && (
-                                                            <p className="flex items-center gap-1 text-xs"><Mail className="w-3 h-3" /> {station.station_email}</p>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="py-4 px-4">
-                                                    <p className="text-sm text-gray-900">{station.manager_name || "—"}</p>
-                                                    <p className="text-xs text-gray-500">{station.manager_phone || ""}</p>
-                                                </td>
-                                                <td className="py-4 px-4 text-center">
-                                                    <button
-                                                        onClick={() => handleToggleOnline(station)}
-                                                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${station.is_online
-                                                            ? "bg-green-100 text-green-700 hover:bg-green-200"
-                                                            : "bg-red-100 text-red-700 hover:bg-red-200"
-                                                            }`}
-                                                    >
-                                                        {station.is_online ? (
-                                                            <><CheckCircle className="w-3 h-3" /> Online</>
-                                                        ) : (
-                                                            <><XCircle className="w-3 h-3" /> Offline</>
-                                                        )}
-                                                    </button>
-                                                </td>
-                                                <td className="py-4 px-4 text-right">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <button
-                                                            onClick={() => { setSelectedStation(station); setShowViewModal(true) }}
-                                                            className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
-                                                            title="View"
-                                                        >
-                                                            <Eye className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => { setSelectedStation(station); setShowFormModal(true) }}
-                                                            className="p-2 hover:bg-blue-100 rounded-lg text-blue-600 transition-colors"
-                                                            title="Edit"
-                                                        >
-                                                            <Edit className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteStation(station)}
-                                                            className="p-2 hover:bg-red-100 rounded-lg text-red-600 transition-colors"
-                                                            title="Delete"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {filteredStations.map((station) => {
+                                            const isExpanded = expandedStations.has(station.station_id)
+                                            const fuelStock = isExpanded ? getStationFuelStock(station.station_id) : []
+                                            const pumps = isExpanded ? getStationPumps(station.station_id) : []
+
+                                            return (
+                                                <>
+                                                    <tr key={station.station_id} className={`border-b ${isExpanded ? 'border-blue-200 bg-blue-50/30' : 'border-gray-100'} hover:bg-gray-50`}>
+                                                        {/* Expand/Collapse toggle */}
+                                                        <td className="py-4 px-4">
+                                                            <button
+                                                                onClick={() => toggleExpand(station.station_id)}
+                                                                className={`p-1.5 rounded-lg transition-all ${isExpanded ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-400'}`}
+                                                                title={isExpanded ? "Collapse" : "Expand to see fuel details"}
+                                                            >
+                                                                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                            </button>
+                                                        </td>
+                                                        <td className="py-4 px-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                                                                    <Building2 className="w-5 h-5 text-blue-600" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-semibold text-gray-900">{station.station_name}</p>
+                                                                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                                                                        <MapPin className="w-3 h-3" /> {station.city || station.physical_address || "No location"}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-4 px-4">
+                                                            <div className="text-sm text-gray-600">
+                                                                {station.station_phone && (
+                                                                    <p className="flex items-center gap-1"><Phone className="w-3 h-3" /> {station.station_phone}</p>
+                                                                )}
+                                                                {station.station_email && (
+                                                                    <p className="flex items-center gap-1 text-xs"><Mail className="w-3 h-3" /> {station.station_email}</p>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-4 px-4">
+                                                            <p className="text-sm text-gray-900">{station.manager_name || "—"}</p>
+                                                            <p className="text-xs text-gray-500">{station.manager_phone || ""}</p>
+                                                        </td>
+                                                        <td className="py-4 px-4 text-center">
+                                                            <button
+                                                                onClick={() => handleToggleOnline(station)}
+                                                                className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${station.is_online
+                                                                    ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                                                    : "bg-red-100 text-red-700 hover:bg-red-200"
+                                                                    }`}
+                                                            >
+                                                                {station.is_online ? (
+                                                                    <><CheckCircle className="w-3 h-3" /> Online</>
+                                                                ) : (
+                                                                    <><XCircle className="w-3 h-3" /> Offline</>
+                                                                )}
+                                                            </button>
+                                                        </td>
+                                                        <td className="py-4 px-4 text-right">
+                                                            <div className="flex items-center justify-end gap-2">
+                                                                <button
+                                                                    onClick={() => { setSelectedStation(station); setShowViewModal(true) }}
+                                                                    className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
+                                                                    title="View"
+                                                                >
+                                                                    <Eye className="w-4 h-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => { setSelectedStation(station); setShowFormModal(true) }}
+                                                                    className="p-2 hover:bg-blue-100 rounded-lg text-blue-600 transition-colors"
+                                                                    title="Edit"
+                                                                >
+                                                                    <Edit className="w-4 h-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteStation(station)}
+                                                                    className="p-2 hover:bg-red-100 rounded-lg text-red-600 transition-colors"
+                                                                    title="Delete"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+
+                                                    {/* Expanded Fuel Details Row */}
+                                                    {isExpanded && (
+                                                        <tr key={`${station.station_id}-details`} className="bg-gradient-to-r from-blue-50/50 to-indigo-50/30 border-b border-blue-200">
+                                                            <td colSpan={6} className="px-4 py-4">
+                                                                <div className="ml-8 space-y-4">
+                                                                    {/* Pumps Section */}
+                                                                    {pumps.length > 0 && (
+                                                                        <div>
+                                                                            <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                                                                                <Fuel className="w-4 h-4 text-blue-600" /> Pumps ({pumps.length})
+                                                                            </h4>
+                                                                            <div className="flex flex-wrap gap-2">
+                                                                                {pumps.map(pump => (
+                                                                                    <div
+                                                                                        key={pump.pump_id}
+                                                                                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${pump.is_active
+                                                                                            ? 'bg-white border-gray-200'
+                                                                                            : 'bg-gray-100 border-gray-200 opacity-60'
+                                                                                            }`}
+                                                                                    >
+                                                                                        <Fuel className="w-3 h-3 text-gray-500" />
+                                                                                        <span className="font-semibold">{pump.pump_name}</span>
+                                                                                        {pump.fuel_type && (
+                                                                                            <span
+                                                                                                className="px-2 py-0.5 rounded-md text-[10px] font-bold"
+                                                                                                style={{
+                                                                                                    backgroundColor: (pump.fuel_type.color_code || "#3B82F6") + "20",
+                                                                                                    color: pump.fuel_type.color_code || "#3B82F6"
+                                                                                                }}
+                                                                                            >
+                                                                                                {pump.fuel_type.fuel_name}
+                                                                                            </span>
+                                                                                        )}
+                                                                                        {!pump.is_active && <span className="text-red-500 text-[10px]">Inactive</span>}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Fuel Stock Breakdown */}
+                                                                    <div>
+                                                                        <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                                                            <Droplet className="w-4 h-4 text-emerald-600" /> Fuel Stock Breakdown
+                                                                        </h4>
+                                                                        {fuelStock.length === 0 ? (
+                                                                            <p className="text-xs text-gray-400 italic">No fuel data recorded for this station yet</p>
+                                                                        ) : (
+                                                                            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                                                {fuelStock.map(fs => {
+                                                                                    const stockPercent = fs.purchased > 0 ? (fs.available / fs.purchased * 100) : 0
+                                                                                    const isLow = stockPercent < 20 && fs.purchased > 0
+                                                                                    return (
+                                                                                        <div
+                                                                                            key={fs.fuel_type_id}
+                                                                                            className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow"
+                                                                                        >
+                                                                                            {/* Header */}
+                                                                                            <div className="flex items-center justify-between mb-3">
+                                                                                                <div className="flex items-center gap-2">
+                                                                                                    <div
+                                                                                                        className="w-3 h-3 rounded-full"
+                                                                                                        style={{ backgroundColor: fs.color_code }}
+                                                                                                    />
+                                                                                                    <span className="font-bold text-sm text-gray-900">{fs.fuel_name}</span>
+                                                                                                </div>
+                                                                                                {isLow && (
+                                                                                                    <span className="text-[10px] font-bold px-2 py-0.5 bg-red-100 text-red-600 rounded-full">LOW</span>
+                                                                                                )}
+                                                                                            </div>
+
+                                                                                            {/* Progress bar */}
+                                                                                            <div className="w-full h-2 bg-gray-100 rounded-full mb-3 overflow-hidden">
+                                                                                                <div
+                                                                                                    className="h-full rounded-full transition-all duration-500"
+                                                                                                    style={{
+                                                                                                        width: `${Math.max(0, Math.min(100, stockPercent))}%`,
+                                                                                                        backgroundColor: isLow ? '#EF4444' : fs.color_code
+                                                                                                    }}
+                                                                                                />
+                                                                                            </div>
+
+                                                                                            {/* Stats Grid */}
+                                                                                            <div className="grid grid-cols-3 gap-2 text-center">
+                                                                                                <div className="bg-green-50 rounded-lg p-2">
+                                                                                                    <p className="text-[10px] font-medium text-green-600 uppercase">Purchased</p>
+                                                                                                    <p className="text-sm font-bold text-green-800">{fs.purchased.toLocaleString()} L</p>
+                                                                                                </div>
+                                                                                                <div className="bg-orange-50 rounded-lg p-2">
+                                                                                                    <p className="text-[10px] font-medium text-orange-600 uppercase">Sold</p>
+                                                                                                    <p className="text-sm font-bold text-orange-800">{fs.sold.toLocaleString()} L</p>
+                                                                                                </div>
+                                                                                                <div className={`rounded-lg p-2 ${isLow ? 'bg-red-50' : 'bg-blue-50'}`}>
+                                                                                                    <p className={`text-[10px] font-medium uppercase ${isLow ? 'text-red-600' : 'text-blue-600'}`}>Available</p>
+                                                                                                    <p className={`text-sm font-bold ${isLow ? 'text-red-800' : 'text-blue-800'}`}>{fs.available.toLocaleString()} L</p>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )
+                                                                                })}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </>
+                                            )
+                                        })}
                                     </tbody>
                                 </table>
                             </div>

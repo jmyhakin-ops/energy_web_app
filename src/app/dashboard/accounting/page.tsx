@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
 import { formatCurrency } from "@/lib/utils"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
+import { accountingApi, CashBookEntry, MpesaBookEntry, TrialBalanceAccount, PnLItem, BalanceSheetCategory, LedgerEntry, ReconciliationRecord } from "@/lib/api"
 
 interface Station { station_id: number; station_name: string }
 interface Pump { pump_id: number; pump_name: string }
@@ -120,40 +121,43 @@ function KpiCard({ title, value, change, icon: Icon, color, prefix = "" }: {
     )
 }
 
-// Overview Tab
+// Overview Tab — uses real Supabase data
 function OverviewTab({ data }: { data: any }) {
-    const revenueData = [
-        { name: "Mon", fuel: 450000, lubricants: 35000, mpesa: 380000, cash: 105000 },
-        { name: "Tue", fuel: 520000, lubricants: 42000, mpesa: 440000, cash: 122000 },
-        { name: "Wed", fuel: 480000, lubricants: 38000, mpesa: 400000, cash: 118000 },
-        { name: "Thu", fuel: 610000, lubricants: 55000, mpesa: 520000, cash: 145000 },
-        { name: "Fri", fuel: 720000, lubricants: 68000, mpesa: 620000, cash: 168000 },
-        { name: "Sat", fuel: 850000, lubricants: 75000, mpesa: 720000, cash: 205000 },
-        { name: "Sun", fuel: 580000, lubricants: 48000, mpesa: 480000, cash: 148000 },
-    ]
+    const revenueData = data.dailySales || []
 
     const paymentBreakdown = [
-        { name: "M-Pesa", value: data.mpesaTotal || 3560000, color: "#10B981" },
-        { name: "Cash", value: data.cashTotal || 1011000, color: "#F59E0B" },
-    ]
+        { name: "M-Pesa", value: data.mpesaTotal || 0, color: "#10B981", [Symbol.toPrimitive as any]: undefined } as any,
+        { name: "Cash", value: data.cashTotal || 0, color: "#F59E0B" },
+        { name: "Credit", value: data.creditTotal || 0, color: "#3B82F6" },
+    ].filter((p: any) => p.value > 0).map((p: any) => ({ name: p.name, value: p.value, color: p.color, ['' as string]: undefined }))
+
+    // Clean payment data for Recharts
+    const cleanPayment = [
+        { name: "M-Pesa", value: data.mpesaTotal || 0, color: "#10B981" },
+        { name: "Cash", value: data.cashTotal || 0, color: "#F59E0B" },
+        { name: "Credit", value: data.creditTotal || 0, color: "#3B82F6" },
+    ].filter(p => p.value > 0)
+
+    const expenseTotal = data.expenses || 0
 
     return (
         <div className="space-y-6">
             {/* KPI Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard title="💰 Total Revenue" value={data.totalRevenue || 4571000} change={12.5} icon={TrendingUp} color="bg-green-100 text-green-600" />
-                <KpiCard title="⛽ Fuel Sales" value={data.fuelSales || 4210000} change={8.3} icon={Fuel} color="bg-blue-100 text-blue-600" />
-                <KpiCard title="🛢️ Lubricant Sales" value={data.lubricantSales || 361000} change={15.2} icon={Banknote} color="bg-purple-100 text-purple-600" />
-                <KpiCard title="📦 Expenses" value={data.expenses || 890000} change={-3.1} icon={TrendingDown} color="bg-red-100 text-red-600" />
+                <KpiCard title="💰 Total Revenue" value={data.totalRevenue || 0} icon={TrendingUp} color="bg-green-100 text-green-600" />
+                <KpiCard title="⛽ Fuel Sales" value={data.fuelSales || 0} icon={Fuel} color="bg-blue-100 text-blue-600" />
+                <KpiCard title="📱 M-Pesa Sales" value={data.mpesaTotal || 0} icon={CreditCard} color="bg-emerald-100 text-emerald-600" />
+                <KpiCard title="📦 Expenses" value={expenseTotal} icon={TrendingDown} color="bg-red-100 text-red-600" />
             </div>
 
             {/* Charts Row */}
             <div className="grid lg:grid-cols-3 gap-6">
                 {/* Revenue Trend */}
                 <Card className="lg:col-span-2">
-                    <CardHeader><CardTitle className="text-base">📈 Weekly Revenue Trend</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-base">📈 Daily Revenue Trend (Real Data)</CardTitle></CardHeader>
                     <CardContent>
                         <div className="h-64">
+                            {revenueData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={revenueData}>
                                     <defs>
@@ -164,34 +168,41 @@ function OverviewTab({ data }: { data: any }) {
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                                     <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${(v / 1000)}K`} />
+                                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
                                     <Tooltip formatter={(v) => formatCurrency(Number(v))} />
                                     <Legend />
-                                    <Area type="monotone" dataKey="fuel" stroke="#3B82F6" fill="url(#fuelGrad)" name="Fuel" />
+                                    <Area type="monotone" dataKey="total" stroke="#3B82F6" fill="url(#fuelGrad)" name="Total Sales" />
                                     <Line type="monotone" dataKey="mpesa" stroke="#10B981" strokeWidth={2} name="M-Pesa" />
                                     <Line type="monotone" dataKey="cash" stroke="#F59E0B" strokeWidth={2} name="Cash" />
                                 </AreaChart>
                             </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-gray-400">No sales data for this period</div>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* Payment Breakdown */}
                 <Card>
-                    <CardHeader><CardTitle className="text-base">💳 Payment Methods</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-base">💳 Payment Methods (Real Data)</CardTitle></CardHeader>
                     <CardContent>
                         <div className="h-48">
+                            {cleanPayment.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <RechartsPie>
-                                    <Pie data={paymentBreakdown} cx="50%" cy="50%" innerRadius={50} outerRadius={70} dataKey="value" label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}>
-                                        {paymentBreakdown.map((entry, i) => (<Cell key={i} fill={entry.color} />))}
+                                    <Pie data={cleanPayment as any[]} cx="50%" cy="50%" innerRadius={50} outerRadius={70} dataKey="value" label={({ name, percent }: any) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}>
+                                        {cleanPayment.map((entry, i) => (<Cell key={i} fill={entry.color} />))}
                                     </Pie>
-                                    <Tooltip formatter={(v) => formatCurrency(Number(v))} />
+                                    <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
                                 </RechartsPie>
                             </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-gray-400">No payment data</div>
+                            )}
                         </div>
                         <div className="space-y-2 mt-2">
-                            {paymentBreakdown.map((pm) => (
+                            {cleanPayment.map((pm) => (
                                 <div key={pm.name} className="flex items-center justify-between text-sm">
                                     <span className="flex items-center gap-2">
                                         <span className="w-3 h-3 rounded-full" style={{ backgroundColor: pm.color }} />
@@ -208,29 +219,60 @@ function OverviewTab({ data }: { data: any }) {
     )
 }
 
-// Cash Book Tab - Enhanced with Station, User, Pump details
-function CashBookTab({ dateFrom, dateTo }: { dateFrom: string; dateTo: string }) {
-    const entries = [
-        { date: "2024-12-26", time: "14:45", ref: "RCP-00156", description: "Fuel Sales - Petrol", station: "Westlands", pump: "P-001", user: "John Kamau", debit: 125000, credit: 0, balance: 125000, type: "fuel" },
-        { date: "2024-12-26", time: "14:20", ref: "RCP-00155", description: "Fuel Sales - Diesel", station: "CBD Main", pump: "P-003", user: "Mary Wanjiku", debit: 98500, credit: 0, balance: 223500, type: "fuel" },
-        { date: "2024-12-26", time: "13:55", ref: "RCP-00154", description: "Lubricant Sales - Engine Oil", station: "Westlands", pump: "-", user: "John Kamau", debit: 15200, credit: 0, balance: 238700, type: "lubricant" },
-        { date: "2024-12-26", time: "11:30", ref: "PV-00045", description: "Fuel Purchase - Total Kenya", station: "Depot", pump: "-", user: "Admin", debit: 0, credit: 450000, balance: -211300, type: "expense" },
-        { date: "2024-12-26", time: "10:15", ref: "RCP-00153", description: "Fuel Sales - Kerosene", station: "Thika Road", pump: "P-002", user: "Peter Otieno", debit: 340000, credit: 0, balance: 128700, type: "fuel" },
-        { date: "2024-12-25", time: "17:00", ref: "PV-00044", description: "Staff Wages - December", station: "HQ", pump: "-", user: "Admin", debit: 0, credit: 45000, balance: 83700, type: "expense" },
-        { date: "2024-12-25", time: "09:30", ref: "PV-00043", description: "Electricity Bill - KPLC", station: "Westlands", pump: "-", user: "Admin", debit: 0, credit: 12500, balance: 71200, type: "expense" },
-    ]
+// Cash Book Tab - Fetches real data from API
+function CashBookTab({ dateFrom, dateTo, stationId }: { dateFrom: string; dateTo: string; stationId: number }) {
+    const [entries, setEntries] = useState<CashBookEntry[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetchCashBook()
+    }, [dateFrom, dateTo, stationId])
+
+    const fetchCashBook = async () => {
+        setLoading(true)
+        try {
+            const data = await accountingApi.getCashBook({
+                start_date: dateFrom,
+                end_date: dateTo,
+                station_id: stationId || undefined
+            })
+            // Calculate running balance
+            let balance = 0
+            const entriesWithBalance = data.entries.map(e => {
+                balance += e.debit - e.credit
+                return { ...e, balance }
+            })
+            setEntries(entriesWithBalance)
+        } catch (e) {
+            console.error('Failed to fetch cash book:', e)
+            toast.error('Failed to load cash book data')
+        }
+        setLoading(false)
+    }
 
     const totalDebit = entries.reduce((s, e) => s + e.debit, 0)
     const totalCredit = entries.reduce((s, e) => s + e.credit, 0)
+
+    if (loading) {
+        return (
+            <Card>
+                <CardContent className="p-8 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                    <span className="ml-2 text-gray-500">Loading cash book...</span>
+                </CardContent>
+            </Card>
+        )
+    }
 
     return (
         <Card>
             <CardHeader>
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                    <CardTitle className="text-base flex items-center gap-2">💰 Cash Book (Detailed)</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-2">💰 Cash Book (Real Data)</CardTitle>
                     <div className="flex gap-2">
                         <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-semibold">In: {formatCurrency(totalDebit)}</span>
                         <span className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-semibold">Out: {formatCurrency(totalCredit)}</span>
+                        <Button variant="outline" size="sm" onClick={fetchCashBook}><RefreshCw className="w-4 h-4" /></Button>
                         <Button variant="outline" size="sm"><Download className="w-4 h-4" /> Export</Button>
                     </div>
                 </div>
@@ -252,41 +294,51 @@ function CashBookTab({ dateFrom, dateTo }: { dateFrom: string; dateTo: string })
                             </tr>
                         </thead>
                         <tbody>
-                            {entries.map((e, i) => (
-                                <tr key={i} className={`border-b border-gray-100 hover:bg-gray-50 ${e.type === "expense" ? "bg-red-50/30" : ""}`}>
-                                    <td className="py-2 px-2 text-sm">
-                                        <div>{e.date}</div>
-                                        <div className="text-xs text-gray-400">{e.time}</div>
+                            {entries.length === 0 ? (
+                                <tr>
+                                    <td colSpan={9} className="py-8 text-center text-gray-500">
+                                        No transactions found for the selected period
                                     </td>
-                                    <td className="py-2 px-2 text-sm font-mono text-blue-600">{e.ref}</td>
-                                    <td className="py-2 px-2 text-sm font-medium">{e.description}</td>
-                                    <td className="py-2 px-2">
-                                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">{e.station}</span>
-                                    </td>
-                                    <td className="py-2 px-2">
-                                        {e.pump !== "-" ? (
-                                            <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-lg text-xs font-mono">{e.pump}</span>
-                                        ) : (
-                                            <span className="text-gray-400">-</span>
-                                        )}
-                                    </td>
-                                    <td className="py-2 px-2">
-                                        <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs">{e.user}</span>
-                                    </td>
-                                    <td className="py-2 px-2 text-right text-sm font-semibold text-green-600">{e.debit > 0 ? formatCurrency(e.debit) : "-"}</td>
-                                    <td className="py-2 px-2 text-right text-sm font-semibold text-red-600">{e.credit > 0 ? formatCurrency(e.credit) : "-"}</td>
-                                    <td className={`py-2 px-2 text-right text-sm font-bold ${e.balance >= 0 ? "text-green-700" : "text-red-700"}`}>{formatCurrency(e.balance)}</td>
                                 </tr>
-                            ))}
+                            ) : (
+                                entries.map((e, i) => (
+                                    <tr key={i} className={`border-b border-gray-100 hover:bg-gray-50 ${e.type === "expense" ? "bg-red-50/30" : ""}`}>
+                                        <td className="py-2 px-2 text-sm">
+                                            <div>{e.date}</div>
+                                            <div className="text-xs text-gray-400">{e.time}</div>
+                                        </td>
+                                        <td className="py-2 px-2 text-sm font-mono text-blue-600">{e.ref}</td>
+                                        <td className="py-2 px-2 text-sm font-medium">{e.description}</td>
+                                        <td className="py-2 px-2">
+                                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">{e.station}</span>
+                                        </td>
+                                        <td className="py-2 px-2">
+                                            {e.pump !== "-" ? (
+                                                <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-lg text-xs font-mono">{e.pump}</span>
+                                            ) : (
+                                                <span className="text-gray-400">-</span>
+                                            )}
+                                        </td>
+                                        <td className="py-2 px-2">
+                                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs">{e.user}</span>
+                                        </td>
+                                        <td className="py-2 px-2 text-right text-sm font-semibold text-green-600">{e.debit > 0 ? formatCurrency(e.debit) : "-"}</td>
+                                        <td className="py-2 px-2 text-right text-sm font-semibold text-red-600">{e.credit > 0 ? formatCurrency(e.credit) : "-"}</td>
+                                        <td className={`py-2 px-2 text-right text-sm font-bold ${e.balance >= 0 ? "text-green-700" : "text-red-700"}`}>{formatCurrency(e.balance)}</td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
-                        <tfoot>
-                            <tr className="bg-gray-100 font-bold">
-                                <td colSpan={6} className="py-3 px-2 text-sm">📊 TOTALS</td>
-                                <td className="py-3 px-2 text-right text-green-700">{formatCurrency(totalDebit)}</td>
-                                <td className="py-3 px-2 text-right text-red-700">{formatCurrency(totalCredit)}</td>
-                                <td className="py-3 px-2 text-right text-blue-700">{formatCurrency(totalDebit - totalCredit)}</td>
-                            </tr>
-                        </tfoot>
+                        {entries.length > 0 && (
+                            <tfoot>
+                                <tr className="bg-gray-100 font-bold">
+                                    <td colSpan={6} className="py-3 px-2 text-sm">📊 TOTALS</td>
+                                    <td className="py-3 px-2 text-right text-green-700">{formatCurrency(totalDebit)}</td>
+                                    <td className="py-3 px-2 text-right text-red-700">{formatCurrency(totalCredit)}</td>
+                                    <td className="py-3 px-2 text-right text-blue-700">{formatCurrency(totalDebit - totalCredit)}</td>
+                                </tr>
+                            </tfoot>
+                        )}
                     </table>
                 </div>
             </CardContent>
@@ -294,32 +346,58 @@ function CashBookTab({ dateFrom, dateTo }: { dateFrom: string; dateTo: string })
     )
 }
 
-// M-Pesa Book Tab - Enhanced with Station, User, Pump details
-function MpesaBookTab() {
-    const entries = [
-        { date: "2024-12-26", time: "14:32", ref: "MPESA-00089", phone: "254712***89", receipt: "SG12AB34CD", station: "Westlands", pump: "P-001", user: "John Kamau", fuelType: "Petrol", liters: 28.89, amount: 5200, status: "success" },
-        { date: "2024-12-26", time: "14:15", ref: "MPESA-00088", phone: "254723***45", receipt: "SG12AB35EF", station: "CBD Main", pump: "P-002", user: "Mary Wanjiku", fuelType: "Diesel", liters: 22.35, amount: 3800, status: "success" },
-        { date: "2024-12-26", time: "13:48", ref: "MPESA-00087", phone: "254734***12", receipt: "SG12AB36GH", station: "Thika Road", pump: "P-003", user: "Peter Otieno", fuelType: "Petrol", liters: 69.44, amount: 12500, status: "success" },
-        { date: "2024-12-26", time: "13:22", ref: "MPESA-00086", phone: "254745***78", receipt: null, station: "Westlands", pump: "P-001", user: "John Kamau", fuelType: "Diesel", liters: 11.76, amount: 2000, status: "failed" },
-        { date: "2024-12-26", time: "12:55", ref: "MPESA-00085", phone: "254756***34", receipt: "SG12AB37IJ", station: "CBD Main", pump: "P-004", user: "Grace Akinyi", fuelType: "Petrol", liters: 49.44, amount: 8900, status: "success" },
-        { date: "2024-12-26", time: "11:30", ref: "MPESA-00084", phone: "254767***56", receipt: "SG12AB38KL", station: "Mombasa Rd", pump: "P-001", user: "James Mwangi", fuelType: "Kerosene", liters: 35.00, amount: 4200, status: "success" },
-        { date: "2024-12-26", time: "10:45", ref: "MPESA-00083", phone: "254778***67", receipt: "SG12AB39MN", station: "Kisumu", pump: "P-002", user: "Sarah Njeri", fuelType: "Diesel", liters: 88.24, amount: 15000, status: "success" },
-    ]
+// M-Pesa Book Tab - Fetches real M-Pesa transactions from API
+function MpesaBookTab({ dateFrom, dateTo, stationId }: { dateFrom: string; dateTo: string; stationId: number }) {
+    const [entries, setEntries] = useState<MpesaBookEntry[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetchMpesaBook()
+    }, [dateFrom, dateTo, stationId])
+
+    const fetchMpesaBook = async () => {
+        setLoading(true)
+        try {
+            const data = await accountingApi.getMpesaBook({
+                start_date: dateFrom,
+                end_date: dateTo,
+                station_id: stationId || undefined
+            })
+            setEntries(data.entries)
+        } catch (e) {
+            console.error('Failed to fetch M-Pesa book:', e)
+            toast.error('Failed to load M-Pesa data')
+        }
+        setLoading(false)
+    }
+
     const totalSuccess = entries.filter(e => e.status === "success").reduce((s, e) => s + e.amount, 0)
     const totalLiters = entries.filter(e => e.status === "success").reduce((s, e) => s + e.liters, 0)
     const successCount = entries.filter(e => e.status === "success").length
     const failedCount = entries.filter(e => e.status === "failed").length
 
+    if (loading) {
+        return (
+            <Card>
+                <CardContent className="p-8 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
+                    <span className="ml-2 text-gray-500">Loading M-Pesa transactions...</span>
+                </CardContent>
+            </Card>
+        )
+    }
+
     return (
         <Card>
             <CardHeader>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <CardTitle className="text-base flex items-center gap-2">📱 M-Pesa Transaction Book (Detailed)</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-2">📱 M-Pesa Transaction Book (Real Data)</CardTitle>
                     <div className="flex flex-wrap gap-2">
                         <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-semibold">✅ {successCount} Success</span>
                         <span className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-semibold">❌ {failedCount} Failed</span>
                         <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold">⛽ {totalLiters.toFixed(1)}L</span>
                         <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg text-sm font-bold">{formatCurrency(totalSuccess)}</span>
+                        <Button variant="outline" size="sm" onClick={fetchMpesaBook}><RefreshCw className="w-4 h-4" /></Button>
                         <Button variant="outline" size="sm"><Download className="w-4 h-4" /> Export</Button>
                     </div>
                 </div>
@@ -343,36 +421,44 @@ function MpesaBookTab() {
                             </tr>
                         </thead>
                         <tbody>
-                            {entries.map((e, i) => (
-                                <tr key={i} className={`border-b border-gray-100 hover:bg-gray-50 ${e.status === "failed" ? "bg-red-50/50" : ""}`}>
-                                    <td className="py-2 px-2 text-sm">
-                                        <div>{e.date}</div>
-                                        <div className="text-xs text-gray-400">{e.time}</div>
-                                    </td>
-                                    <td className="py-2 px-2 text-xs font-mono text-blue-600">{e.ref}</td>
-                                    <td className="py-2 px-2 text-sm font-mono">{e.phone}</td>
-                                    <td className="py-2 px-2">
-                                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">{e.station}</span>
-                                    </td>
-                                    <td className="py-2 px-2">
-                                        <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-lg text-xs font-mono">{e.pump}</span>
-                                    </td>
-                                    <td className="py-2 px-2">
-                                        <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs">{e.user}</span>
-                                    </td>
-                                    <td className="py-2 px-2">
-                                        <span className="px-2 py-1 bg-cyan-100 text-cyan-700 rounded-lg text-xs">{e.fuelType}</span>
-                                    </td>
-                                    <td className="py-2 px-2 text-right text-sm font-medium text-indigo-600">{e.liters.toFixed(2)}L</td>
-                                    <td className="py-2 px-2 text-right text-sm font-bold text-green-600">{formatCurrency(e.amount)}</td>
-                                    <td className="py-2 px-2 text-xs font-mono text-gray-600">{e.receipt || "-"}</td>
-                                    <td className="py-2 px-2 text-center">
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-medium ${e.status === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                                            {e.status === "success" ? "✅" : "❌"}
-                                        </span>
+                            {entries.length === 0 ? (
+                                <tr>
+                                    <td colSpan={11} className="py-8 text-center text-gray-500">
+                                        No M-Pesa transactions found for the selected period
                                     </td>
                                 </tr>
-                            ))}
+                            ) : (
+                                entries.map((e, i) => (
+                                    <tr key={i} className={`border-b border-gray-100 hover:bg-gray-50 ${e.status === "failed" ? "bg-red-50/50" : ""}`}>
+                                        <td className="py-2 px-2 text-sm">
+                                            <div>{e.date}</div>
+                                            <div className="text-xs text-gray-400">{e.time}</div>
+                                        </td>
+                                        <td className="py-2 px-2 text-xs font-mono text-blue-600">{e.ref}</td>
+                                        <td className="py-2 px-2 text-sm font-mono">{e.phone}</td>
+                                        <td className="py-2 px-2">
+                                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">{e.station}</span>
+                                        </td>
+                                        <td className="py-2 px-2">
+                                            <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-lg text-xs font-mono">{e.pump}</span>
+                                        </td>
+                                        <td className="py-2 px-2">
+                                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs">{e.user}</span>
+                                        </td>
+                                        <td className="py-2 px-2">
+                                            <span className="px-2 py-1 bg-cyan-100 text-cyan-700 rounded-lg text-xs">{e.fuelType}</span>
+                                        </td>
+                                        <td className="py-2 px-2 text-right text-sm font-medium text-indigo-600">{e.liters.toFixed(2)}L</td>
+                                        <td className="py-2 px-2 text-right text-sm font-bold text-green-600">{formatCurrency(e.amount)}</td>
+                                        <td className="py-2 px-2 text-xs font-mono text-gray-600">{e.receipt || "-"}</td>
+                                        <td className="py-2 px-2 text-center">
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-medium ${e.status === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                                {e.status === "success" ? "✅" : "❌"}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -382,35 +468,57 @@ function MpesaBookTab() {
 }
 
 
-// Trial Balance Tab
-function TrialBalanceTab() {
-    const accounts = [
-        { code: "1000", name: "Cash at Bank", debit: 2450000, credit: 0 },
-        { code: "1100", name: "M-Pesa Float", debit: 850000, credit: 0 },
-        { code: "1200", name: "Accounts Receivable", debit: 125000, credit: 0 },
-        { code: "1300", name: "Fuel Inventory", debit: 3200000, credit: 0 },
-        { code: "1400", name: "Lubricant Inventory", debit: 450000, credit: 0 },
-        { code: "2000", name: "Accounts Payable", debit: 0, credit: 1850000 },
-        { code: "2100", name: "VAT Payable", debit: 0, credit: 320000 },
-        { code: "3000", name: "Share Capital", debit: 0, credit: 3000000 },
-        { code: "3100", name: "Retained Earnings", debit: 0, credit: 1200000 },
-        { code: "4000", name: "Fuel Sales Revenue", debit: 0, credit: 8500000 },
-        { code: "4100", name: "Lubricant Revenue", debit: 0, credit: 650000 },
-        { code: "5000", name: "Cost of Fuel Sold", debit: 6800000, credit: 0 },
-        { code: "5100", name: "Cost of Lubricants", debit: 420000, credit: 0 },
-        { code: "6000", name: "Operating Expenses", debit: 1225000, credit: 0 },
-    ]
-    const totalDebit = accounts.reduce((s, a) => s + a.debit, 0)
-    const totalCredit = accounts.reduce((s, a) => s + a.credit, 0)
+// Trial Balance Tab - Fetches real account balances from API
+function TrialBalanceTab({ dateTo }: { dateTo: string }) {
+    const [accounts, setAccounts] = useState<TrialBalanceAccount[]>([])
+    const [totalDebit, setTotalDebit] = useState(0)
+    const [totalCredit, setTotalCredit] = useState(0)
+    const [balanced, setBalanced] = useState(true)
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetchTrialBalance()
+    }, [dateTo])
+
+    const fetchTrialBalance = async () => {
+        setLoading(true)
+        try {
+            const data = await accountingApi.getTrialBalance({
+                as_of_date: dateTo
+            })
+            setAccounts(data.accounts)
+            setTotalDebit(data.total_debit)
+            setTotalCredit(data.total_credit)
+            setBalanced(data.balanced)
+        } catch (e) {
+            console.error('Failed to fetch trial balance:', e)
+            toast.error('Failed to load trial balance')
+        }
+        setLoading(false)
+    }
+
+    if (loading) {
+        return (
+            <Card>
+                <CardContent className="p-8 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                    <span className="ml-2 text-gray-500">Loading trial balance...</span>
+                </CardContent>
+            </Card>
+        )
+    }
 
     return (
         <Card>
             <CardHeader>
                 <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">⚖️ Trial Balance</CardTitle>
-                    <span className={`px-3 py-1 rounded-lg text-sm font-bold ${totalDebit === totalCredit ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                        {totalDebit === totalCredit ? "✅ Balanced" : "⚠️ Unbalanced"}
-                    </span>
+                    <CardTitle className="text-base">⚖️ Trial Balance (Real Data)</CardTitle>
+                    <div className="flex gap-2">
+                        <span className={`px-3 py-1 rounded-lg text-sm font-bold ${balanced ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                            {balanced ? "✅ Balanced" : "⚠️ Unbalanced"}
+                        </span>
+                        <Button variant="outline" size="sm" onClick={fetchTrialBalance}><RefreshCw className="w-4 h-4" /></Button>
+                    </div>
                 </div>
             </CardHeader>
             <CardContent>
@@ -425,14 +533,22 @@ function TrialBalanceTab() {
                             </tr>
                         </thead>
                         <tbody>
-                            {accounts.map((a) => (
-                                <tr key={a.code} className="border-b border-gray-100 hover:bg-gray-50">
-                                    <td className="py-2 px-3 text-sm font-mono text-gray-500">{a.code}</td>
-                                    <td className="py-2 px-3 text-sm font-medium">{a.name}</td>
-                                    <td className="py-2 px-3 text-right text-sm">{a.debit > 0 ? formatCurrency(a.debit) : "-"}</td>
-                                    <td className="py-2 px-3 text-right text-sm">{a.credit > 0 ? formatCurrency(a.credit) : "-"}</td>
+                            {accounts.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="py-8 text-center text-gray-500">
+                                        No accounts found
+                                    </td>
                                 </tr>
-                            ))}
+                            ) : (
+                                accounts.map((a) => (
+                                    <tr key={a.code} className="border-b border-gray-100 hover:bg-gray-50">
+                                        <td className="py-2 px-3 text-sm font-mono text-gray-500">{a.code}</td>
+                                        <td className="py-2 px-3 text-sm font-medium">{a.name}</td>
+                                        <td className="py-2 px-3 text-right text-sm">{a.debit > 0 ? formatCurrency(a.debit) : "-"}</td>
+                                        <td className="py-2 px-3 text-right text-sm">{a.credit > 0 ? formatCurrency(a.credit) : "-"}</td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                         <tfoot>
                             <tr className="bg-gray-100 font-bold text-lg">
@@ -448,29 +564,58 @@ function TrialBalanceTab() {
     )
 }
 
-// Profit & Loss Tab
-function ProfitLossTab() {
-    const revenue = [
-        { name: "Fuel Sales", amount: 8500000 },
-        { name: "Lubricant Sales", amount: 650000 },
-        { name: "Other Income", amount: 45000 },
-    ]
-    const expenses = [
-        { name: "Cost of Fuel Sold", amount: 6800000 },
-        { name: "Cost of Lubricants", amount: 420000 },
-        { name: "Staff Salaries", amount: 580000 },
-        { name: "Rent & Utilities", amount: 185000 },
-        { name: "Marketing", amount: 65000 },
-        { name: "Other Expenses", amount: 125000 },
-    ]
-    const totalRevenue = revenue.reduce((s, r) => s + r.amount, 0)
-    const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
-    const netProfit = totalRevenue - totalExpenses
+// Profit & Loss Tab - Fetches real revenue/expense data from API
+function ProfitLossTab({ dateFrom, dateTo }: { dateFrom: string; dateTo: string }) {
+    const [revenue, setRevenue] = useState<PnLItem[]>([])
+    const [expenses, setExpenses] = useState<PnLItem[]>([])
+    const [totalRevenue, setTotalRevenue] = useState(0)
+    const [totalExpenses, setTotalExpenses] = useState(0)
+    const [netProfit, setNetProfit] = useState(0)
+    const [margin, setMargin] = useState(0)
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetchProfitLoss()
+    }, [dateFrom, dateTo])
+
+    const fetchProfitLoss = async () => {
+        setLoading(true)
+        try {
+            const data = await accountingApi.getProfitLoss({
+                start_date: dateFrom,
+                end_date: dateTo
+            })
+            setRevenue(data.revenue)
+            setExpenses(data.expenses)
+            setTotalRevenue(data.total_revenue)
+            setTotalExpenses(data.total_expenses)
+            setNetProfit(data.net_profit)
+            setMargin(data.margin)
+        } catch (e) {
+            console.error('Failed to fetch P&L:', e)
+            toast.error('Failed to load profit & loss data')
+        }
+        setLoading(false)
+    }
+
+    if (loading) {
+        return (
+            <Card>
+                <CardContent className="p-8 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
+                    <span className="ml-2 text-gray-500">Loading profit & loss...</span>
+                </CardContent>
+            </Card>
+        )
+    }
 
     return (
         <div className="grid lg:grid-cols-2 gap-6">
             <Card className="bg-gradient-to-br from-green-50 to-emerald-50">
-                <CardHeader><CardTitle className="text-base text-green-800">📈 Revenue</CardTitle></CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-base text-green-800">📈 Revenue</CardTitle>
+                    <Button variant="outline" size="sm" onClick={fetchProfitLoss}><RefreshCw className="w-4 h-4" /></Button>
+                </CardHeader>
                 <CardContent>
                     {revenue.map((r) => (
                         <div key={r.name} className="flex justify-between py-2 border-b border-green-200">
@@ -507,52 +652,66 @@ function ProfitLossTab() {
                     <p className={`text-4xl font-bold ${netProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
                         {netProfit >= 0 ? "🎉 " : "⚠️ "}{formatCurrency(Math.abs(netProfit))}
                     </p>
-                    <p className="text-sm text-gray-500 mt-2">Margin: {((netProfit / totalRevenue) * 100).toFixed(1)}%</p>
+                    <p className="text-sm text-gray-500 mt-2">Margin: {margin.toFixed(1)}%</p>
                 </CardContent>
             </Card>
         </div>
     )
 }
 
-// Balance Sheet Tab
-function BalanceSheetTab() {
-    const assets = [
-        {
-            category: "Current Assets", items: [
-                { name: "Cash at Bank", amount: 2450000 },
-                { name: "M-Pesa Float", amount: 850000 },
-                { name: "Fuel Inventory", amount: 3200000 },
-                { name: "Lubricant Inventory", amount: 450000 },
-            ]
-        },
-        {
-            category: "Fixed Assets", items: [
-                { name: "Pumps & Equipment", amount: 8500000 },
-                { name: "Vehicles", amount: 2200000 },
-            ]
-        },
-    ]
-    const liabilities = [
-        {
-            category: "Current Liabilities", items: [
-                { name: "Accounts Payable", amount: 1850000 },
-                { name: "VAT Payable", amount: 320000 },
-            ]
-        },
-    ]
-    const equity = [
-        { name: "Share Capital", amount: 10000000 },
-        { name: "Retained Earnings", amount: 5480000 },
-    ]
+// Balance Sheet Tab - Fetches real assets/liabilities from API
+function BalanceSheetTab({ dateTo }: { dateTo: string }) {
+    const [assets, setAssets] = useState<BalanceSheetCategory[]>([])
+    const [liabilities, setLiabilities] = useState<BalanceSheetCategory[]>([])
+    const [equity, setEquity] = useState<{ name: string; amount: number }[]>([])
+    const [totalAssets, setTotalAssets] = useState(0)
+    const [totalLiabilities, setTotalLiabilities] = useState(0)
+    const [totalEquity, setTotalEquity] = useState(0)
+    const [balanced, setBalanced] = useState(true)
+    const [loading, setLoading] = useState(true)
 
-    const totalAssets = assets.flatMap(a => a.items).reduce((s, i) => s + i.amount, 0)
-    const totalLiabilities = liabilities.flatMap(l => l.items).reduce((s, i) => s + i.amount, 0)
-    const totalEquity = equity.reduce((s, e) => s + e.amount, 0)
+    useEffect(() => {
+        fetchBalanceSheet()
+    }, [dateTo])
+
+    const fetchBalanceSheet = async () => {
+        setLoading(true)
+        try {
+            const data = await accountingApi.getBalanceSheet({
+                as_of_date: dateTo
+            })
+            setAssets(data.assets)
+            setLiabilities(data.liabilities)
+            setEquity(data.equity)
+            setTotalAssets(data.total_assets)
+            setTotalLiabilities(data.total_liabilities)
+            setTotalEquity(data.total_equity)
+            setBalanced(data.balanced)
+        } catch (e) {
+            console.error('Failed to fetch balance sheet:', e)
+            toast.error('Failed to load balance sheet')
+        }
+        setLoading(false)
+    }
+
+    if (loading) {
+        return (
+            <Card>
+                <CardContent className="p-8 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                    <span className="ml-2 text-gray-500">Loading balance sheet...</span>
+                </CardContent>
+            </Card>
+        )
+    }
 
     return (
         <div className="grid lg:grid-cols-2 gap-6">
             <Card>
-                <CardHeader><CardTitle className="text-base text-blue-800">📊 Assets</CardTitle></CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-base text-blue-800">📊 Assets</CardTitle>
+                    <Button variant="outline" size="sm" onClick={fetchBalanceSheet}><RefreshCw className="w-4 h-4" /></Button>
+                </CardHeader>
                 <CardContent>
                     {assets.map((cat) => (
                         <div key={cat.category} className="mb-4">
@@ -573,7 +732,12 @@ function BalanceSheetTab() {
             </Card>
 
             <Card>
-                <CardHeader><CardTitle className="text-base text-purple-800">📋 Liabilities & Equity</CardTitle></CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-base text-purple-800">📋 Liabilities & Equity</CardTitle>
+                    <span className={`px-3 py-1 rounded-lg text-xs font-bold ${balanced ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                        {balanced ? "✅" : "⚠️"}
+                    </span>
+                </CardHeader>
                 <CardContent>
                     {liabilities.map((cat) => (
                         <div key={cat.category} className="mb-4">
@@ -603,56 +767,44 @@ function BalanceSheetTab() {
     )
 }
 
-// General Ledger Tab
-function LedgerTab() {
-    const [selectedAccount, setSelectedAccount] = useState("1000")
+// General Ledger Tab - Fetches real ledger entries from API
+function LedgerTab({ dateFrom, dateTo }: { dateFrom: string; dateTo: string }) {
+    const [selectedAccount, setSelectedAccount] = useState("4000")
+    const [entries, setEntries] = useState<LedgerEntry[]>([])
+    const [totalDebit, setTotalDebit] = useState(0)
+    const [totalCredit, setTotalCredit] = useState(0)
+    const [balance, setBalance] = useState(0)
+    const [loading, setLoading] = useState(true)
 
     const accounts = [
-        { code: "1000", name: "💰 Cash at Bank", type: "Asset" },
+        { code: "4000", name: "💰 Fuel Sales Revenue", type: "Revenue" },
         { code: "1100", name: "📱 M-Pesa Float", type: "Asset" },
-        { code: "1200", name: "📋 Accounts Receivable", type: "Asset" },
-        { code: "1300", name: "⛽ Fuel Inventory", type: "Asset" },
-        { code: "1400", name: "🛢️ Lubricant Inventory", type: "Asset" },
-        { code: "2000", name: "📦 Accounts Payable", type: "Liability" },
-        { code: "2100", name: "💳 VAT Payable", type: "Liability" },
-        { code: "4000", name: "⛽ Fuel Sales Revenue", type: "Revenue" },
-        { code: "4100", name: "🛢️ Lubricant Revenue", type: "Revenue" },
-        { code: "5000", name: "📊 Cost of Fuel Sold", type: "Expense" },
-        { code: "6000", name: "💼 Operating Expenses", type: "Expense" },
     ]
 
-    const ledgerEntries: Record<string, Array<{ date: string; ref: string; description: string; debit: number; credit: number; balance: number }>> = {
-        "1000": [
-            { date: "2024-12-01", ref: "OB-001", description: "Opening Balance", debit: 2000000, credit: 0, balance: 2000000 },
-            { date: "2024-12-05", ref: "RCP-001", description: "Fuel Sales - Station 1", debit: 450000, credit: 0, balance: 2450000 },
-            { date: "2024-12-08", ref: "PV-001", description: "Fuel Purchase - Total Kenya", debit: 0, credit: 850000, balance: 1600000 },
-            { date: "2024-12-12", ref: "RCP-045", description: "Fuel Sales - Station 2", debit: 380000, credit: 0, balance: 1980000 },
-            { date: "2024-12-15", ref: "PV-012", description: "Staff Salaries", debit: 0, credit: 280000, balance: 1700000 },
-            { date: "2024-12-18", ref: "RCP-089", description: "Lubricant Sales", debit: 125000, credit: 0, balance: 1825000 },
-            { date: "2024-12-22", ref: "PV-018", description: "Electricity Bill", debit: 0, credit: 45000, balance: 1780000 },
-            { date: "2024-12-26", ref: "RCP-156", description: "Fuel Sales - Station 3", debit: 670000, credit: 0, balance: 2450000 },
-        ],
-        "1100": [
-            { date: "2024-12-01", ref: "OB-002", description: "Opening Balance", debit: 500000, credit: 0, balance: 500000 },
-            { date: "2024-12-03", ref: "MPESA-001", description: "M-Pesa Sales - Pump 1", debit: 125000, credit: 0, balance: 625000 },
-            { date: "2024-12-06", ref: "MPESA-045", description: "M-Pesa Sales - Pump 2", debit: 98000, credit: 0, balance: 723000 },
-            { date: "2024-12-10", ref: "TRF-001", description: "Transfer to Bank", debit: 0, credit: 200000, balance: 523000 },
-            { date: "2024-12-15", ref: "MPESA-089", description: "M-Pesa Sales - Pump 3", debit: 156000, credit: 0, balance: 679000 },
-            { date: "2024-12-20", ref: "MPESA-134", description: "M-Pesa Sales - Pump 1", debit: 171000, credit: 0, balance: 850000 },
-        ],
-        "4000": [
-            { date: "2024-12-05", ref: "INV-001", description: "Fuel Sales - Petrol", debit: 0, credit: 450000, balance: 450000 },
-            { date: "2024-12-08", ref: "INV-012", description: "Fuel Sales - Diesel", debit: 0, credit: 520000, balance: 970000 },
-            { date: "2024-12-12", ref: "INV-034", description: "Fuel Sales - Petrol", debit: 0, credit: 380000, balance: 1350000 },
-            { date: "2024-12-18", ref: "INV-056", description: "Fuel Sales - Kerosene", debit: 0, credit: 125000, balance: 1475000 },
-            { date: "2024-12-22", ref: "INV-078", description: "Fuel Sales - Diesel", debit: 0, credit: 670000, balance: 2145000 },
-        ],
+    useEffect(() => {
+        fetchLedger()
+    }, [selectedAccount, dateFrom, dateTo])
+
+    const fetchLedger = async () => {
+        setLoading(true)
+        try {
+            const data = await accountingApi.getLedger({
+                account_code: selectedAccount,
+                start_date: dateFrom,
+                end_date: dateTo
+            })
+            setEntries(data.entries)
+            setTotalDebit(data.total_debit)
+            setTotalCredit(data.total_credit)
+            setBalance(data.balance)
+        } catch (e) {
+            console.error('Failed to fetch ledger:', e)
+            toast.error('Failed to load ledger data')
+        }
+        setLoading(false)
     }
 
     const currentAccount = accounts.find(a => a.code === selectedAccount)
-    const entries = ledgerEntries[selectedAccount] || []
-    const totalDebit = entries.reduce((s, e) => s + e.debit, 0)
-    const totalCredit = entries.reduce((s, e) => s + e.credit, 0)
 
     return (
         <div className="space-y-4">
@@ -673,8 +825,8 @@ function LedgerTab() {
                             </select>
                         </div>
                         <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={fetchLedger}><RefreshCw className="w-4 h-4" /></Button>
                             <Button variant="outline" size="sm"><Download className="w-4 h-4" /> Export</Button>
-                            <Button variant="outline" size="sm"><RefreshCw className="w-4 h-4" /></Button>
                         </div>
                     </div>
                 </CardContent>
@@ -696,14 +848,14 @@ function LedgerTab() {
                 </div>
                 <div className="bg-white rounded-xl p-4 border border-gray-100">
                     <p className="text-xs text-gray-500">Current Balance</p>
-                    <p className="text-lg font-bold text-green-600">{formatCurrency(entries[entries.length - 1]?.balance || 0)}</p>
+                    <p className="text-lg font-bold text-green-600">{formatCurrency(balance)}</p>
                 </div>
             </div>
 
             {/* Ledger Entries Table */}
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">📖 Ledger Entries - {currentAccount?.name}</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-2">📖 Ledger Entries - {currentAccount?.name} {loading && <Loader2 className="w-4 h-4 animate-spin" />}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="overflow-x-auto">
@@ -719,23 +871,31 @@ function LedgerTab() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {entries.map((e, i) => (
-                                    <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                                        <td className="py-3 px-3 text-sm">{e.date}</td>
-                                        <td className="py-3 px-3 text-sm font-mono text-blue-600">{e.ref}</td>
-                                        <td className="py-3 px-3 text-sm font-medium">{e.description}</td>
-                                        <td className="py-3 px-3 text-right text-sm font-semibold text-green-600">{e.debit > 0 ? formatCurrency(e.debit) : "-"}</td>
-                                        <td className="py-3 px-3 text-right text-sm font-semibold text-red-600">{e.credit > 0 ? formatCurrency(e.credit) : "-"}</td>
-                                        <td className="py-3 px-3 text-right text-sm font-bold text-blue-700">{formatCurrency(e.balance)}</td>
+                                {entries.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="py-8 text-center text-gray-500">
+                                            No ledger entries found for the selected period
+                                        </td>
                                     </tr>
-                                ))}
+                                ) : (
+                                    entries.map((e, i) => (
+                                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                            <td className="py-3 px-3 text-sm">{e.date}</td>
+                                            <td className="py-3 px-3 text-sm font-mono text-blue-600">{e.ref}</td>
+                                            <td className="py-3 px-3 text-sm font-medium">{e.description}</td>
+                                            <td className="py-3 px-3 text-right text-sm font-semibold text-green-600">{e.debit > 0 ? formatCurrency(e.debit) : "-"}</td>
+                                            <td className="py-3 px-3 text-right text-sm font-semibold text-red-600">{e.credit > 0 ? formatCurrency(e.credit) : "-"}</td>
+                                            <td className="py-3 px-3 text-right text-sm font-bold text-blue-700">{formatCurrency(e.balance)}</td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                             <tfoot>
                                 <tr className="bg-gray-100 font-bold">
                                     <td colSpan={3} className="py-3 px-3 text-sm">📊 TOTALS</td>
                                     <td className="py-3 px-3 text-right text-green-700">{formatCurrency(totalDebit)}</td>
                                     <td className="py-3 px-3 text-right text-red-700">{formatCurrency(totalCredit)}</td>
-                                    <td className="py-3 px-3 text-right text-blue-700">{formatCurrency(entries[entries.length - 1]?.balance || 0)}</td>
+                                    <td className="py-3 px-3 text-right text-blue-700">{formatCurrency(balance)}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -746,34 +906,45 @@ function LedgerTab() {
     )
 }
 
-// Reconciliation Tab
-function ReconciliationTab() {
-    const [reconcileType, setReconcileType] = useState<"bank" | "mpesa">("bank")
+// Reconciliation Tab - Fetches real reconciliation data from API
+function ReconciliationTab({ dateFrom, dateTo }: { dateFrom: string; dateTo: string }) {
+    const [reconcileType, setReconcileType] = useState<"bank" | "mpesa">("mpesa")
+    const [bankStatement, setBankStatement] = useState<ReconciliationRecord[]>([])
+    const [systemRecords, setSystemRecords] = useState<ReconciliationRecord[]>([])
+    const [bankTotal, setBankTotal] = useState(0)
+    const [systemTotal, setSystemTotal] = useState(0)
+    const [difference, setDifference] = useState(0)
+    const [matchedCount, setMatchedCount] = useState(0)
+    const [unmatchedCount, setUnmatchedCount] = useState(0)
+    const [matchRate, setMatchRate] = useState(0)
+    const [loading, setLoading] = useState(true)
 
-    const bankStatement = [
-        { date: "2024-12-01", ref: "CHQ-001", description: "Deposit", amount: 500000, type: "credit" },
-        { date: "2024-12-05", ref: "TRF-IN-01", description: "Transfer from M-Pesa", amount: 200000, type: "credit" },
-        { date: "2024-12-08", ref: "CHQ-045", description: "Cheque Payment - Supplier", amount: 350000, type: "debit" },
-        { date: "2024-12-12", ref: "TRF-IN-02", description: "Customer Payment", amount: 180000, type: "credit" },
-        { date: "2024-12-15", ref: "DD-001", description: "Direct Debit - Salaries", amount: 280000, type: "debit" },
-        { date: "2024-12-20", ref: "TRF-IN-03", description: "Transfer from M-Pesa", amount: 150000, type: "credit" },
-    ]
+    useEffect(() => {
+        fetchReconciliation()
+    }, [reconcileType, dateFrom, dateTo])
 
-    const systemRecords = [
-        { date: "2024-12-01", ref: "RCP-001", description: "Cash Deposit", amount: 500000, type: "credit", matched: true },
-        { date: "2024-12-05", ref: "TRF-001", description: "M-Pesa Transfer", amount: 200000, type: "credit", matched: true },
-        { date: "2024-12-08", ref: "PV-001", description: "Supplier Payment", amount: 350000, type: "debit", matched: true },
-        { date: "2024-12-12", ref: "RCP-045", description: "Customer Receipt", amount: 180000, type: "credit", matched: true },
-        { date: "2024-12-14", ref: "RCP-052", description: "Cash Sale (Not in Bank)", amount: 45000, type: "credit", matched: false },
-        { date: "2024-12-15", ref: "PV-012", description: "Salary Payment", amount: 280000, type: "debit", matched: true },
-        { date: "2024-12-20", ref: "TRF-002", description: "M-Pesa Transfer", amount: 150000, type: "credit", matched: true },
-    ]
-
-    const bankTotal = bankStatement.reduce((s, e) => s + (e.type === "credit" ? e.amount : -e.amount), 0)
-    const systemTotal = systemRecords.reduce((s, e) => s + (e.type === "credit" ? e.amount : -e.amount), 0)
-    const difference = systemTotal - bankTotal
-    const matchedCount = systemRecords.filter(r => r.matched).length
-    const unmatchedCount = systemRecords.filter(r => !r.matched).length
+    const fetchReconciliation = async () => {
+        setLoading(true)
+        try {
+            const data = await accountingApi.getReconciliation({
+                type: reconcileType,
+                start_date: dateFrom,
+                end_date: dateTo
+            })
+            setBankStatement(data.bank_statement)
+            setSystemRecords(data.system_records)
+            setBankTotal(data.bank_total)
+            setSystemTotal(data.system_total)
+            setDifference(data.difference)
+            setMatchedCount(data.matched_count)
+            setUnmatchedCount(data.unmatched_count)
+            setMatchRate(data.match_rate)
+        } catch (e) {
+            console.error('Failed to fetch reconciliation:', e)
+            toast.error('Failed to load reconciliation data')
+        }
+        setLoading(false)
+    }
 
     return (
         <div className="space-y-6">
@@ -796,7 +967,7 @@ function ReconciliationTab() {
             {/* Summary Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
-                    <p className="text-xs text-blue-600 font-medium">🏦 Bank Balance</p>
+                    <p className="text-xs text-blue-600 font-medium">🏦 {reconcileType === "bank" ? "Bank" : "M-Pesa"} Balance</p>
                     <p className="text-2xl font-bold text-blue-700">{formatCurrency(bankTotal)}</p>
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
@@ -811,7 +982,7 @@ function ReconciliationTab() {
                 </div>
                 <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-4 border border-amber-200">
                     <p className="text-xs text-amber-600 font-medium">📊 Match Rate</p>
-                    <p className="text-2xl font-bold text-amber-700">{((matchedCount / systemRecords.length) * 100).toFixed(0)}%</p>
+                    <p className="text-2xl font-bold text-amber-700">{matchRate.toFixed(0)}%</p>
                     <p className="text-xs text-amber-600">{matchedCount} matched, {unmatchedCount} pending</p>
                 </div>
             </div>
@@ -820,8 +991,9 @@ function ReconciliationTab() {
             <div className="grid lg:grid-cols-2 gap-6">
                 {/* Bank Statement */}
                 <Card>
-                    <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
-                        <CardTitle className="text-base flex items-center gap-2">🏦 Bank Statement</CardTitle>
+                    <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 flex flex-row items-center justify-between">
+                        <CardTitle className="text-base flex items-center gap-2">🏦 {reconcileType === "bank" ? "Bank" : "M-Pesa"} Statement</CardTitle>
+                        <Button variant="outline" size="sm" onClick={fetchReconciliation}><RefreshCw className="w-4 h-4" /></Button>
                     </CardHeader>
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
@@ -954,32 +1126,73 @@ export default function AccountingPage() {
     const [activeTab, setActiveTab] = useState("overview")
     const [loading, setLoading] = useState(true)
     const [stations, setStations] = useState<Station[]>([])
-    const [dateFrom, setDateFrom] = useState(new Date().toISOString().split("T")[0])
+    const [dateFrom, setDateFrom] = useState(() => {
+        const d = new Date()
+        d.setDate(d.getDate() - 30)
+        return d.toISOString().split("T")[0]
+    })
     const [dateTo, setDateTo] = useState(new Date().toISOString().split("T")[0])
     const [selectedStation, setSelectedStation] = useState(0)
     const [data, setData] = useState<any>({})
 
     useEffect(() => {
         fetchData()
-    }, [])
+    }, [dateFrom, dateTo, selectedStation])
 
     const fetchData = async () => {
         setLoading(true)
         try {
             if (isSupabaseConfigured() && supabase) {
-                const [stRes, salesRes, mpesaRes] = await Promise.all([
+                const [stRes, shiftsRes, c2bRes] = await Promise.all([
                     supabase.from("stations").select("station_id, station_name"),
-                    supabase.from("sales").select("total_amount, payment_method"),
-                    supabase.from("mpesa_transactions").select("amount, status"),
+                    supabase.from("pump_shifts").select("total_sales, cash_sales, mpesa_sales, credit_sales, shift_expenses, opening_time")
+                        .gte("opening_time", `${dateFrom}T00:00:00`)
+                        .lte("opening_time", `${dateTo}T23:59:59`)
+                        .order("opening_time", { ascending: true }),
+                    supabase.from("c2b_transactions").select("amount, transaction_time")
+                        .gte("transaction_time", `${dateFrom}T00:00:00`)
+                        .lte("transaction_time", `${dateTo}T23:59:59`)
+                        .order("transaction_time", { ascending: true }),
                 ])
                 setStations(stRes.data || [])
-                const sales = salesRes.data || []
-                const mpesa = mpesaRes.data || []
+                const shifts = shiftsRes.data || []
+                const c2b = c2bRes.data || []
+
+                const cashTotal = shifts.reduce((s: number, x: any) => s + (x.cash_sales || 0), 0)
+                const mpesaFromShifts = shifts.reduce((s: number, x: any) => s + (x.mpesa_sales || 0), 0)
+                const mpesaFromC2B = c2b.reduce((s: number, x: any) => s + (x.amount || 0), 0)
+                const mpesaTotal = Math.max(mpesaFromShifts, mpesaFromC2B)
+                const creditTotal = shifts.reduce((s: number, x: any) => s + (x.credit_sales || 0), 0)
+                const totalExpenses = shifts.reduce((s: number, x: any) => s + (x.shift_expenses || 0), 0)
+                const totalRevenue = cashTotal + mpesaTotal + creditTotal
+
+                // Group by day for chart (from pump_shifts)
+                const dailyMap: Record<string, { total: number; mpesa: number; cash: number }> = {}
+                shifts.forEach((sh: any) => {
+                    const d = new Date(sh.opening_time)
+                    const key = `${d.getMonth() + 1}/${d.getDate()}`
+                    if (!dailyMap[key]) dailyMap[key] = { total: 0, mpesa: 0, cash: 0 }
+                    dailyMap[key].total += (sh.cash_sales || 0) + (sh.mpesa_sales || 0) + (sh.credit_sales || 0)
+                    dailyMap[key].mpesa += sh.mpesa_sales || 0
+                    dailyMap[key].cash += sh.cash_sales || 0
+                })
+                // Also add C2B M-Pesa grouped by day
+                c2b.forEach((tx: any) => {
+                    const d = new Date(tx.transaction_time)
+                    const key = `${d.getMonth() + 1}/${d.getDate()}`
+                    if (!dailyMap[key]) dailyMap[key] = { total: 0, mpesa: 0, cash: 0 }
+                    // Only add if C2B > shifts for M-Pesa (avoid double counting)
+                })
+                const dailySales = Object.entries(dailyMap).map(([name, vals]) => ({ name, ...vals }))
+
                 setData({
-                    totalRevenue: sales.reduce((s: number, x: any) => s + (x.total_amount || 0), 0),
-                    fuelSales: sales.reduce((s: number, x: any) => s + (x.total_amount || 0), 0),
-                    mpesaTotal: mpesa.filter((m: any) => m.status === "success").reduce((s: number, m: any) => s + (m.amount || 0), 0),
-                    cashTotal: sales.filter((s: any) => s.payment_method === "cash").reduce((acc: number, s: any) => acc + (s.total_amount || 0), 0),
+                    totalRevenue,
+                    fuelSales: totalRevenue,
+                    mpesaTotal,
+                    cashTotal,
+                    creditTotal,
+                    expenses: totalExpenses,
+                    dailySales,
                 })
             }
         } catch (e) { console.error(e) }
@@ -1026,13 +1239,13 @@ export default function AccountingPage() {
                 ) : (
                     <>
                         {activeTab === "overview" && <OverviewTab data={data} />}
-                        {activeTab === "cashbook" && <CashBookTab dateFrom={dateFrom} dateTo={dateTo} />}
-                        {activeTab === "mpesa" && <MpesaBookTab />}
-                        {activeTab === "trial" && <TrialBalanceTab />}
-                        {activeTab === "pnl" && <ProfitLossTab />}
-                        {activeTab === "balance" && <BalanceSheetTab />}
-                        {activeTab === "ledger" && <LedgerTab />}
-                        {activeTab === "reconcile" && <ReconciliationTab />}
+                        {activeTab === "cashbook" && <CashBookTab dateFrom={dateFrom} dateTo={dateTo} stationId={selectedStation} />}
+                        {activeTab === "mpesa" && <MpesaBookTab dateFrom={dateFrom} dateTo={dateTo} stationId={selectedStation} />}
+                        {activeTab === "trial" && <TrialBalanceTab dateTo={dateTo} />}
+                        {activeTab === "pnl" && <ProfitLossTab dateFrom={dateFrom} dateTo={dateTo} />}
+                        {activeTab === "balance" && <BalanceSheetTab dateTo={dateTo} />}
+                        {activeTab === "ledger" && <LedgerTab dateFrom={dateFrom} dateTo={dateTo} />}
+                        {activeTab === "reconcile" && <ReconciliationTab dateFrom={dateFrom} dateTo={dateTo} />}
                     </>
                 )}
             </div>

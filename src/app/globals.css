@@ -115,22 +115,72 @@
   animation: float 3s ease-in-out infinite;
 }
 
-/* Hide scrollbar utility for login page */
-.no-scrollbar {
-  -ms-overflow-style: none;
-  /* IE and Edge */
-  scrollbar-width: none;
-  /* Firefox */
+/* Elegant thin scrollbar for login panel */
+.login-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 92, 246, 0.3) transparent;
 }
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-  /* Chrome, Safari and Opera */
+.login-scroll::-webkit-scrollbar {
+  width: 5px;
 }
 
-/* Login page - prevent any scrolling */
-.login-no-scroll {
-  overflow: hidden;
-  height: 100vh;
-  max-height: 100vh;
+.login-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.login-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.4), rgba(6, 182, 212, 0.4));
+  border-radius: 10px;
+}
+
+.login-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.6), rgba(6, 182, 212, 0.6));
+}
+
+/* Glassmorphism card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* Slow floating animation */
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-12px) rotate(1deg); }
+}
+
+.animate-float-slow {
+  animation: float-slow 5s ease-in-out infinite;
+}
+
+/* Gradient mesh background for login left panel */
+@keyframes mesh-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.login-mesh-bg {
+  background: linear-gradient(-45deg, #f8fafc, #ede9fe, #e0f2fe, #f0fdf4, #faf5ff);
+  background-size: 400% 400%;
+  animation: mesh-shift 15s ease infinite;
+}
+
+/* Glow ring on focus */
+.glow-ring-focus:focus-within {
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.12), 0 0 20px rgba(139, 92, 246, 0.08);
+}
+
+/* Shimmer effect for button */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.btn-shimmer {
+  background-size: 200% auto;
+  animation: shimmer 3s linear infinite;
 }

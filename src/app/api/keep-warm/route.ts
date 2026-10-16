@@ -3,13 +3,13 @@ import { NextResponse } from "next/server"
 export const revalidate = 0
 export const dynamic = "force-dynamic"
 
-// Keep Render backend warm - scheduled to run every 10 minutes
+// Keep Supabase Edge Functions warm - scheduled to run every 10 minutes
 export async function GET() {
     const startTime = Date.now()
 
     try {
-        // Ping the Render backend health endpoint
-        const response = await fetch("https://online-link.onrender.com/health.php", {
+        // Ping the Supabase edge function health endpoint
+        const response = await fetch("https://pxcdaivlvltmdifxietb.supabase.co/functions/v1/check-status", {
             method: "GET",
             headers: { "Accept": "application/json" },
         })
