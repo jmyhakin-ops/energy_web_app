@@ -2,14 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
 
-// Use service_role key to bypass RLS on users_new table
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Force dynamic rendering - do not evaluate at build time
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
+    // Create client inside handler so env vars are available at runtime
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
     const { username, password } = await req.json()
 
     if (!username || !password) {
