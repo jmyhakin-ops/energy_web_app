@@ -250,8 +250,8 @@ export default function DashboardPage() {
                 supabase.from("users_new").select("user_id, full_name").eq("is_active", true),
                 supabase.from("shifts").select("shift_id, shift_name"),
                 supabase.from("pump_shifts").select("pump_shift_id, shift_id").eq("is_closed", false),
-                // Fetch ALL sales with dates for filtering
-                supabase.from("sales").select("sale_id, amount, total_amount, payment_method, transaction_status, created_at, station_id, pump_id, attendant_id, pump_shift_id, fuel_type_id, liters_sold, price_per_liter"),
+                // Fetch ALL sales with dates for filtering (latest first to avoid 1000 row cutoff)
+                supabase.from("sales").select("sale_id, amount, total_amount, payment_method, transaction_status, created_at, station_id, pump_id, attendant_id, pump_shift_id, fuel_type_id, liters_sold, price_per_liter").order("created_at", { ascending: false }).limit(5000),
                 supabase.from("payroll").select("net_salary, payment_status"),
                 supabase.from("expenses").select("amount, status"),
                 supabase.from("salary_advances").select("amount, status").eq("status", "pending"),
